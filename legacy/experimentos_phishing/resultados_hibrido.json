@@ -1,0 +1,50 @@
+{
+ "solo_reglas": {
+  "precision": 0.9567,
+  "recall": 0.2288,
+  "f1": 0.3693,
+  "exactitud": 0.7915
+ },
+ "solo_IA_umbral_0.5": {
+  "precision": 0.9407,
+  "recall": 0.8989,
+  "f1": 0.9193,
+  "exactitud": 0.9579
+ },
+ "hibrido_A_regla_de_seguridad": {
+  "precision": 0.9382,
+  "recall": 0.8996,
+  "f1": 0.9185,
+  "exactitud": 0.9574
+ },
+ "hibrido_B_combinacion_aprendida": {
+  "precision": 0.9506,
+  "recall": 0.8908,
+  "f1": 0.9197,
+  "exactitud": 0.9585
+ },
+ "pesos_hibrido_B": {
+  "IA": 1.002,
+  "senal_alta": -0.047,
+  "senal_media": -0.291,
+  "senal_baja": 0.231
+ },
+ "recall_con_1pct_falsas_alarmas": {
+  "IA": 0.8683,
+  "hibrido_A": 0.8683,
+  "hibrido_B": 0.8675
+ },
+ "recall_con_2pct_falsas_alarmas": {
+  "IA": 0.8976,
+  "hibrido_A": 0.8964,
+  "hibrido_B": 0.8973
+ },
+ "auc_roc": {
+  "IA": 0.985,
+  "hibrido_A": 0.985,
+  "hibrido_B": 0.985
+ },
+ "phishing_que_la_IA_dejo_pasar": 3243,
+ "de_esos_rescatados_por_reglas_alta": 34,
+ "buenos_con_senal_alta_que_la_IA_no_marco": 254
+}

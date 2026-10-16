@@ -1,0 +1,29 @@
+# Centinela · servicios de infraestructura.
+#   cp .env.example .env   (y completa las claves)
+#   docker compose up -d bd
+#   cd backend && uv run alembic upgrade head
+name: centinela
+
+services:
+  bd:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en .env}
+      CENTINELA_CLAVE_OWNER: ${CENTINELA_CLAVE_OWNER:?Define CENTINELA_CLAVE_OWNER en .env}
+      CENTINELA_CLAVE_APP: ${CENTINELA_CLAVE_APP:?Define CENTINELA_CLAVE_APP en .env}
+    ports:
+      - "127.0.0.1:${CENTINELA_PUERTO_BD:-5433}:5432"     # solo accesible desde este equipo
+    volumes:
+      - datos_bd:/var/lib/postgresql/data                 # los datos sobreviven a reinicios
+      - ./backend/scripts/crear_bd.sql:/scripts/crear_bd.sql:ro
+      - ./backend/scripts/docker-init.sh:/docker-entrypoint-initdb.d/10-centinela.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d centinela"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  datos_bd:

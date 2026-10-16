@@ -1,0 +1,26 @@
+# Secretos y entorno
+.env
+*.env.local
+legacy/.streamlit/secrets.toml
+
+# Bases de datos locales
+*.db
+*.sqlite3
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.egg-info/
+
+# Node
+node_modules/
+dist/
+
+# Sistema
+.DS_Store

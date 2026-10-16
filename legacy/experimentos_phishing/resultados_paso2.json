@@ -1,0 +1,94 @@
+{
+ "modelos": {
+  "Regresion logistica": {
+   "exactitud": 0.9156,
+   "precision": 0.784,
+   "recall": 0.8355,
+   "f1": 0.809,
+   "auc_roc": 0.9539,
+   "auc_pr": 0.906,
+   "falsos_positivos": 4295,
+   "falsos_negativos": 3069,
+   "tasa_falsos_positivos": 0.0626,
+   "recall_con_FPR_1pct": 0.7012,
+   "recall_con_FPR_2pct": 0.7436,
+   "recall_con_FPR_5pct": 0.8151
+  },
+  "XGBoost": {
+   "exactitud": 0.9536,
+   "precision": 0.9283,
+   "recall": 0.8485,
+   "f1": 0.8866,
+   "auc_roc": 0.9803,
+   "auc_pr": 0.9554,
+   "falsos_positivos": 1222,
+   "falsos_negativos": 2827,
+   "tasa_falsos_positivos": 0.0178,
+   "recall_con_FPR_1pct": 0.8136,
+   "recall_con_FPR_2pct": 0.8567,
+   "recall_con_FPR_5pct": 0.9161
+  }
+ },
+ "importancia": [
+  [
+   "n_palabras_sospechosas",
+   0.17422813177108765
+  ],
+  [
+   "wordpress",
+   0.11350542306900024
+  ],
+  [
+   "tld_es_pais",
+   0.10332535207271576
+  ],
+  [
+   "marca_suplantada",
+   0.0764041468501091
+  ],
+  [
+   "kw_login",
+   0.07463972270488739
+  ],
+  [
+   "ext_peligrosa",
+   0.048630185425281525
+  ],
+  [
+   "tld_tasa",
+   0.043551765382289886
+  ],
+  [
+   "digitos_host",
+   0.023557079955935478
+  ],
+  [
+   "marca_en_url",
+   0.016670232638716698
+  ],
+  [
+   "ext_php",
+   0.015516579151153564
+  ],
+  [
+   "kw_bank",
+   0.014871221035718918
+  ],
+  [
+   "token_mas_largo",
+   0.013762758113443851
+  ],
+  [
+   "racha_digitos",
+   0.012033269740641117
+  ],
+  [
+   "guiones_url",
+   0.011115476489067078
+  ],
+  [
+   "arrobas",
+   0.010774718597531319
+  ]
+ ]
+}

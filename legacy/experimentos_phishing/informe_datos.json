@@ -1,0 +1,29 @@
+{
+ "filas_originales": 549346,
+ "con_esquema_http_en_malos": 1081,
+ "urls_en_ambas_clases": 1,
+ "duplicados_eliminados": 42153,
+ "filas_limpias": 507183,
+ "malos": 114291,
+ "buenos": 392892,
+ "dominios_distintos": 150724,
+ "dominios_en_ambas_clases": 347,
+ "por_particion": {
+  "train": {
+   "filas": 348358,
+   "malos_pct": 22.7,
+   "dominios": 105502
+  },
+  "val": {
+   "filas": 71554,
+   "malos_pct": 23.4,
+   "dominios": 22613
+  },
+  "test": {
+   "filas": 87271,
+   "malos_pct": 21.4,
+   "dominios": 22609
+  }
+ },
+ "dominios_compartidos_train_test": 0
+}
