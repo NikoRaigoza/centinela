@@ -1,0 +1,403 @@
+{
+  "corpus": {
+    "version_normalizacion": "1",
+    "spaphish": {
+      "total": 1395,
+      "phishing": 731,
+      "legitimos": 664
+    },
+    "spearphishmx": {
+      "total": 3006,
+      "clase_legitimo_descartada": 1115,
+      "spear_total": 1891,
+      "spear_descartado_asunto_legitimo_en_spaphish": 204,
+      "spear_descartado_duplicado_de_spaphish": 44
+    },
+    "eliminados_duplicados_o_contradictorios": 98,
+    "corpus": {
+      "total": 2938,
+      "phishing": 2276,
+      "legitimos": 662,
+      "por_fuente_y_clase": {
+        "spaphish_0": 662,
+        "spaphish_1": 684,
+        "spearphishmx_1": 1592
+      },
+      "grupos": 2858
+    }
+  },
+  "validacion": "StratifiedGroupKFold(5)",
+  "resultados": {
+    "M1 TF-IDF palabras + RL": {
+      "pr_auc": {
+        "media": 0.9966,
+        "desv": 0.0005
+      },
+      "roc_auc": {
+        "media": 0.9869,
+        "desv": 0.0021
+      },
+      "f1": {
+        "media": 0.9687,
+        "desv": 0.0052
+      },
+      "recall_fpr_5": {
+        "media": 0.9552,
+        "desv": 0.0093
+      },
+      "brier": {
+        "media": 0.04,
+        "desv": 0.0045
+      },
+      "fp_en_legitimos": {
+        "media": 0.0438,
+        "desv": 0.0099
+      },
+      "recall_phishing_real_spaphish": {
+        "media": 0.8875,
+        "desv": 0.0303
+      },
+      "recall_spear_spearphishmx": {
+        "media": 0.9787,
+        "desv": 0.0075
+      },
+      "segundos": 2.5
+    },
+    "M2 TF-IDF palabras + SVM lineal": {
+      "pr_auc": {
+        "media": 0.9972,
+        "desv": 0.0005
+      },
+      "roc_auc": {
+        "media": 0.9892,
+        "desv": 0.0019
+      },
+      "f1": {
+        "media": 0.9716,
+        "desv": 0.0049
+      },
+      "recall_fpr_5": {
+        "media": 0.9618,
+        "desv": 0.0082
+      },
+      "brier": {
+        "media": 0.1019,
+        "desv": 0.0022
+      },
+      "fp_en_legitimos": {
+        "media": 0.0438,
+        "desv": 0.0135
+      },
+      "recall_phishing_real_spaphish": {
+        "media": 0.9065,
+        "desv": 0.0298
+      },
+      "recall_spear_spearphishmx": {
+        "media": 0.9787,
+        "desv": 0.0075
+      },
+      "segundos": 2.4
+    },
+    "M3 TF-IDF palabras+caracteres + RL": {
+      "pr_auc": {
+        "media": 0.997,
+        "desv": 0.0004
+      },
+      "roc_auc": {
+        "media": 0.9888,
+        "desv": 0.0014
+      },
+      "f1": {
+        "media": 0.9701,
+        "desv": 0.0051
+      },
+      "recall_fpr_5": {
+        "media": 0.9578,
+        "desv": 0.0088
+      },
+      "brier": {
+        "media": 0.0344,
+        "desv": 0.0036
+      },
+      "fp_en_legitimos": {
+        "media": 0.0529,
+        "desv": 0.0152
+      },
+      "recall_phishing_real_spaphish": {
+        "media": 0.9065,
+        "desv": 0.0259
+      },
+      "recall_spear_spearphishmx": {
+        "media": 0.978,
+        "desv": 0.0077
+      },
+      "segundos": 13.4
+    },
+    "M4 XGBoost solo rasgos (ablación)": {
+      "pr_auc": {
+        "media": 0.986,
+        "desv": 0.005
+      },
+      "roc_auc": {
+        "media": 0.9507,
+        "desv": 0.0169
+      },
+      "f1": {
+        "media": 0.9185,
+        "desv": 0.0213
+      },
+      "recall_fpr_5": {
+        "media": 0.826,
+        "desv": 0.0647
+      },
+      "brier": {
+        "media": 0.0874,
+        "desv": 0.019
+      },
+      "fp_en_legitimos": {
+        "media": 0.0891,
+        "desv": 0.0363
+      },
+      "recall_phishing_real_spaphish": {
+        "media": 0.7106,
+        "desv": 0.1106
+      },
+      "recall_spear_spearphishmx": {
+        "media": 0.941,
+        "desv": 0.01
+      },
+      "segundos": 0.7
+    },
+    "M5 XGBoost dos etapas (texto + rasgos)": {
+      "pr_auc": {
+        "media": 0.9974,
+        "desv": 0.0005
+      },
+      "roc_auc": {
+        "media": 0.9904,
+        "desv": 0.0019
+      },
+      "f1": {
+        "media": 0.9709,
+        "desv": 0.0039
+      },
+      "recall_fpr_5": {
+        "media": 0.9618,
+        "desv": 0.004
+      },
+      "brier": {
+        "media": 0.0341,
+        "desv": 0.0043
+      },
+      "fp_en_legitimos": {
+        "media": 0.0378,
+        "desv": 0.0106
+      },
+      "recall_phishing_real_spaphish": {
+        "media": 0.8992,
+        "desv": 0.0302
+      },
+      "recall_spear_spearphishmx": {
+        "media": 0.9774,
+        "desv": 0.0071
+      },
+      "segundos": 13.1
+    },
+    "M6 LightGBM dos etapas (texto + rasgos)": {
+      "pr_auc": {
+        "media": 0.9973,
+        "desv": 0.0002
+      },
+      "roc_auc": {
+        "media": 0.99,
+        "desv": 0.0008
+      },
+      "f1": {
+        "media": 0.9714,
+        "desv": 0.0027
+      },
+      "recall_fpr_5": {
+        "media": 0.9644,
+        "desv": 0.0036
+      },
+      "brier": {
+        "media": 0.0343,
+        "desv": 0.0014
+      },
+      "fp_en_legitimos": {
+        "media": 0.0634,
+        "desv": 0.0304
+      },
+      "recall_phishing_real_spaphish": {
+        "media": 0.9225,
+        "desv": 0.0197
+      },
+      "recall_spear_spearphishmx": {
+        "media": 0.9786,
+        "desv": 0.0064
+      },
+      "segundos": 15.8
+    }
+  },
+  "criterio": "más simple a ≤1,5 pts de PR-AUC del mejor",
+  "mejor": "M5 XGBoost dos etapas (texto + rasgos)",
+  "elegido": "M1 TF-IDF palabras + RL",
+  "transferencia_spaphish_a_spear": {
+    "M1 TF-IDF palabras + RL": {
+      "recall_spear_umbral_05": 0.2563,
+      "mediana_probabilidad": 0.4141
+    },
+    "M5 XGBoost dos etapas (texto + rasgos)": {
+      "recall_spear_umbral_05": 0.3103,
+      "mediana_probabilidad": 0.2411
+    }
+  },
+  "solo_correos_reales": {
+    "M1 TF-IDF palabras + RL": {
+      "pr_auc": {
+        "media": 0.992,
+        "desv": 0.0045
+      },
+      "roc_auc": {
+        "media": 0.9915,
+        "desv": 0.0043
+      },
+      "f1": {
+        "media": 0.9475,
+        "desv": 0.0221
+      },
+      "fp_en_legitimos": {
+        "media": 0.0196,
+        "desv": 0.0086
+      },
+      "recall_fpr_5": {
+        "media": 0.9575,
+        "desv": 0.031
+      }
+    },
+    "M2 TF-IDF palabras + SVM lineal": {
+      "pr_auc": {
+        "media": 0.9936,
+        "desv": 0.0036
+      },
+      "roc_auc": {
+        "media": 0.9931,
+        "desv": 0.0035
+      },
+      "f1": {
+        "media": 0.9586,
+        "desv": 0.0173
+      },
+      "fp_en_legitimos": {
+        "media": 0.0166,
+        "desv": 0.0098
+      },
+      "recall_fpr_5": {
+        "media": 0.9663,
+        "desv": 0.0199
+      }
+    },
+    "M5 XGBoost dos etapas (texto + rasgos)": {
+      "pr_auc": {
+        "media": 0.9907,
+        "desv": 0.0048
+      },
+      "roc_auc": {
+        "media": 0.9886,
+        "desv": 0.0051
+      },
+      "f1": {
+        "media": 0.9489,
+        "desv": 0.0232
+      },
+      "fp_en_legitimos": {
+        "media": 0.0287,
+        "desv": 0.0135
+      },
+      "recall_fpr_5": {
+        "media": 0.9516,
+        "desv": 0.0473
+      }
+    },
+    "M6 LightGBM dos etapas (texto + rasgos)": {
+      "pr_auc": {
+        "media": 0.9901,
+        "desv": 0.0043
+      },
+      "roc_auc": {
+        "media": 0.9888,
+        "desv": 0.0046
+      },
+      "f1": {
+        "media": 0.9526,
+        "desv": 0.0127
+      },
+      "fp_en_legitimos": {
+        "media": 0.0529,
+        "desv": 0.0192
+      },
+      "recall_fpr_5": {
+        "media": 0.9458,
+        "desv": 0.0438
+      }
+    }
+  },
+  "importancia_2a_etapa": [
+    [
+      "p_texto",
+      34.74
+    ],
+    [
+      "lex_urgencia",
+      6.33
+    ],
+    [
+      "log_largo",
+      1.64
+    ],
+    [
+      "n_correo",
+      1.47
+    ],
+    [
+      "n_url",
+      1.25
+    ],
+    [
+      "ratio_mayusculas",
+      1.13
+    ],
+    [
+      "lex_accion",
+      1.1
+    ],
+    [
+      "lex_premio",
+      1.07
+    ],
+    [
+      "exclamaciones",
+      0.99
+    ],
+    [
+      "lex_dinero",
+      0.97
+    ],
+    [
+      "lex_credenciales",
+      0.92
+    ],
+    [
+      "interrogaciones",
+      0.79
+    ],
+    [
+      "n_telefono",
+      0.78
+    ],
+    [
+      "lex_amenaza",
+      0.65
+    ]
+  ]
+}

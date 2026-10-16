@@ -65,9 +65,10 @@ def construir_clasificador(carpeta: Path, manifiesto: dict, modelo_id: int | Non
     formato = manifiesto["formato"]
     if formato == "xgboost-url-v3":
         return ClasificadorEnlacesXgb(carpeta / "modelo.json", modelo_id)
-    if formato == "texto-lineal-v1":
+    if formato in ("texto-lineal-v1", "texto-lineal-v2"):
         modelos = {Path(n).stem: ModeloTextoLineal(carpeta / n) for n in manifiesto["archivos"] if n.endswith(".json")}
-        return ClasificadorContenidoLineal(modelos, modelo_id)
+        return ClasificadorContenidoLineal(modelos, modelo_id, umbral_medio=float(manifiesto.get("umbral_medio", 0.3)),
+                                           umbral_alto=float(manifiesto.get("umbral_alto", 0.7)))
     raise ValueError(f"Formato de modelo desconocido: {formato}")
 
 

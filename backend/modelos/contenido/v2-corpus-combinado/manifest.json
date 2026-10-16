@@ -1,0 +1,42 @@
+{
+  "tipo": "contenido",
+  "formato": "texto-lineal-v2",
+  "nombre": "TF-IDF (1-2 palabras) + regresión logística, calibrado",
+  "version": "v2-corpus-combinado",
+  "dataset": "Corpus combinado v1: SpaPhish completo + spear-phishing depurado de SpearPhishMX (2.938 correos)",
+  "umbral_medio": 0.5,
+  "umbral_alto": 0.86,
+  "metricas": {
+    "validacion": "StratifiedGroupKFold(5), predicciones fuera de pliegue",
+    "pr_auc": 0.9962,
+    "roc_auc": 0.9876,
+    "brier_sin_calibrar": 0.04,
+    "brier_calibrado": 0.0322,
+    "umbral_0_5": {
+      "fp_en_legitimos": 0.0982,
+      "recall_phishing_real": 0.9561,
+      "recall_spear": 0.9812
+    },
+    "umbral_0_7": {
+      "fp_en_legitimos": 0.0378,
+      "recall_phishing_real": 0.883,
+      "recall_spear": 0.9786
+    },
+    "umbral_alto_elegido": {
+      "umbral": 0.86,
+      "fp_en_legitimos": 0.0091,
+      "recall_phishing_real": 0.7602,
+      "recall_spear": 0.9705
+    },
+    "paridad_backend": 4.963556010650905e-09,
+    "eleccion": "Experimento v1: el más simple a ≤1,5 pts de PR-AUC del mejor (ver ml/resultados)"
+  },
+  "normalizacion": {
+    "es": "1",
+    "en": null
+  },
+  "archivos": {
+    "en.json": "8af8cf617591b99a3030cefa95cab235076896091ad4d9b03743d1d5e430d6bc",
+    "es.json": "5a5735591abeb82073e1973d5fb7dd209afdf6579297dceda8894d894fba4db6"
+  }
+}

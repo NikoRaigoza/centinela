@@ -28,6 +28,7 @@ from centinela.dominio.riesgo import (
     NivelRiesgo,
     Razon,
     Veredicto,
+    a_escala_comun,
     combinar_riesgo,
     redactar_resumen,
     seleccionar_razones,
@@ -75,7 +76,9 @@ class MotorAnalisis:
         p_enlaces = mean(probabilidades) if probabilidades else None       # el promedio fue lo más estable
 
         razones = reglas.razones + (contenido.razones if contenido else []) + _razones_de_enlaces(enlaces, reglas.razones)
-        combinado = combinar_riesgo(contenido.probabilidad if contenido else None, p_enlaces, reglas.razones,
+        # El texto se lleva a la escala común con los puntos de operación propios del modelo.
+        p_texto = a_escala_comun(contenido.probabilidad, contenido.umbral_medio, contenido.umbral_alto) if contenido else None
+        combinado = combinar_riesgo(p_texto, p_enlaces, reglas.razones,
                                     remitente_verificado=reglas.remitente_verificado)
         nivel = NivelRiesgo.desde_probabilidad(combinado.p_final, UMBRAL_MEDIO, UMBRAL_ALTO)
         if nivel is not NivelRiesgo.BAJO and not razones:

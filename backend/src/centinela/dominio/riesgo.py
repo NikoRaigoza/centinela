@@ -94,7 +94,8 @@ class Veredicto:
 
     @property
     def razones_visibles(self) -> list[Razon]:
-        return seleccionar_razones(self.razones)
+        """Lo que ve el usuario: hasta 3 razones. Un correo de riesgo BAJO no muestra razones (no alarma sin motivo)."""
+        return [] if self.nivel is NivelRiesgo.BAJO else seleccionar_razones(self.razones)
 
     @property
     def amerita_caso(self) -> bool:
@@ -109,6 +110,20 @@ PESO_ENLACES = 0.6        # los enlaces apoyan pero no mandan: solos llegan a ri
 BONO_CONCORDANCIA = 0.05  # cada componente adicional que también ve riesgo suma un poco
 TOPE = 0.99
 FACTOR_REMITENTE_VERIFICADO = 0.5   # remitente oficial de una entidad del catálogo, verificado por DMARC
+
+
+def a_escala_comun(p: float, umbral_medio_modelo: float, umbral_alto_modelo: float) -> float:
+    """Lleva la probabilidad de un modelo a la escala común del sistema, por tramos lineales:
+    su umbral MEDIO (≤5 % de falsos positivos en validación) cae en 0,30 y su umbral ALTO (≤1 %) en 0,70.
+    Así cada versión del modelo trae sus propios puntos de operación y el resto del sistema no cambia."""
+    um, ua = umbral_medio_modelo, umbral_alto_modelo
+    if not 0 < um < ua < 1:
+        raise DatoInvalido("Los umbrales del modelo deben cumplir 0 < medio < alto < 1.")
+    if p < um:
+        return UMBRAL_MEDIO * p / um
+    if p < ua:
+        return UMBRAL_MEDIO + (UMBRAL_ALTO - UMBRAL_MEDIO) * (p - um) / (ua - um)
+    return min(TOPE, UMBRAL_ALTO + (TOPE - UMBRAL_ALTO) * (p - ua) / (1 - ua))
 
 
 @dataclass(frozen=True)

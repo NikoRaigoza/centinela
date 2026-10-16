@@ -118,9 +118,11 @@ class LectorCorreo(Protocol):
 # ---------------------------------------------------------------------- modelos de machine learning
 @dataclass(frozen=True)
 class EvaluacionContenido:
-    probabilidad: float
+    probabilidad: float           # calibrada
     razones: list[Razon]
     idioma: str
+    umbral_medio: float = 0.3     # puntos de operación del modelo (FP ≤ 5 % y ≤ 1 % en legítimos), de su manifiesto
+    umbral_alto: float = 0.7
 
 
 @dataclass(frozen=True)

@@ -118,8 +118,9 @@ def test_veredicto_valida_probabilidades_y_exige_razones():
         Veredicto(p_final=1.2, nivel=NivelRiesgo.ALTO, resumen="x", razones=[Razon(Area.ENLACE, Gravedad.ALTA, "x")])
     with pytest.raises(DatoInvalido):
         Veredicto(p_final=0.9, nivel=NivelRiesgo.ALTO, resumen="x")
-    v = Veredicto(p_final=0.1, nivel=NivelRiesgo.BAJO, resumen="Sin señales de riesgo")
-    assert not v.amerita_caso
+    v = Veredicto(p_final=0.1, nivel=NivelRiesgo.BAJO, resumen="Sin señales de riesgo",
+                  razones=[Razon(Area.CONTENIDO, Gravedad.MEDIA, "texto algo sospechoso")])
+    assert not v.amerita_caso and v.razones_visibles == []           # se guarda, pero no se muestra
 
 
 # ----------------------------------------------------------------- caso

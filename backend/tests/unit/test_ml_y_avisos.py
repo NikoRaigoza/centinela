@@ -56,7 +56,7 @@ def test_modelo_de_contenido_explica_con_palabras():
     assert phishing.idioma == "es" and phishing.probabilidad > normal.probabilidad
     if phishing.razones:
         assert "«" in phishing.razones[0].texto
-    assert c.evaluar("Hola", "Bonjour, ceci est un message en français sans modèle disponible pour cette langue.") is None
+    assert c.evaluar("123", "4567 890 !!! ### 2026-10-16 $$$ 99.99") is None       # sin idioma reconocible
 
 
 def test_aviso_firmado_y_legible():

@@ -15,6 +15,7 @@ import numpy as np
 import xgboost as xgb
 
 from centinela.adaptadores.salida.ml import caracteristicas_url as cu
+from centinela.adaptadores.salida.ml.texto import normalizar
 from centinela.aplicacion.puertos import EvaluacionContenido, EvaluacionEnlace
 from centinela.dominio.dominios import ACORTADORES, dominio_registrado, host_de_url
 from centinela.dominio.entidades import sin_acentos
@@ -24,6 +25,9 @@ from centinela.dominio.riesgo import UMBRAL_ALTO, Area, Gravedad, Razon
 _VACIAS = frozenset("el la los las un una de del en y o que es su sus con para por al lo se no si mi tu le les nos "
                     "ha han he has sido fue son era esta este estos estas ese esa usted ud sr sra muy mas ya hay "
                     "the and you your is are to of for with this that has have been was".split())
+
+
+_MARCADORES = frozenset({"zurl", "znum", "zcorreo", "ztelefono", "zident"})   # los pone texto.normalizar
 
 
 class ClasificadorEnlacesXgb:
@@ -51,7 +55,11 @@ class ClasificadorEnlacesXgb:
 
 
 class ModeloTextoLineal:
-    """Formato JSON del prototipo: vocabulario, idf, coeficientes e intercepto (TF-IDF sublineal, norma L2)."""
+    """TF-IDF sublineal (norma L2) + regresión logística exportados a JSON: vocabulario, idf, coeficientes, intercepto.
+
+    Campos opcionales (formato v2): "normalizacion" (versión de texto.normalizar que se aplica antes) y
+    "calibracion" (tabla isotónica x→y que convierte el puntaje en una probabilidad bien calibrada).
+    """
 
     def __init__(self, ruta: Path):
         d = json.loads(ruta.read_text(encoding="utf-8"))
@@ -59,7 +67,17 @@ class ModeloTextoLineal:
         self.idf = np.array(d["idf"], dtype=np.float64)
         self.coef = np.array(d["coef"], dtype=np.float64)
         self.intercepto = float(d["intercepto"])
+        self.normalizacion: str | None = d.get("normalizacion")
+        cal = d.get("calibracion")
+        self._cal = (np.array(cal["x"], dtype=np.float64), np.array(cal["y"], dtype=np.float64)) if cal else None
         self._inv: dict[int, str] | None = None
+
+    def preparar(self, asunto: str, cuerpo: str) -> str:
+        return normalizar(asunto, cuerpo) if self.normalizacion else f"{asunto} {cuerpo}"
+
+    def probabilidad_sin_calibrar(self, texto: str) -> float:
+        z = self.intercepto + sum(self.coef[j] * x for j, x in self._vector(texto).items())
+        return 1.0 / (1.0 + math.exp(-max(min(z, 30.0), -30.0)))
 
     @staticmethod
     def _tokens(texto: str) -> list[str]:
@@ -79,8 +97,8 @@ class ModeloTextoLineal:
         return {j: x / norma for j, x in v.items()}
 
     def probabilidad(self, texto: str) -> float:
-        z = self.intercepto + sum(self.coef[j] * x for j, x in self._vector(texto).items())
-        return 1.0 / (1.0 + math.exp(-max(min(z, 30.0), -30.0)))
+        p = self.probabilidad_sin_calibrar(texto)
+        return float(np.interp(p, *self._cal)) if self._cal is not None else p
 
     def palabras_clave(self, texto: str, n: int = 3) -> list[str]:
         """Expresiones que más empujan hacia phishing (aporte exacto de un modelo lineal)."""
@@ -89,7 +107,7 @@ class ModeloTextoLineal:
         aportes = sorted(((self.coef[j] * x, self._inv[j]) for j, x in self._vector(texto).items()), reverse=True)
         elegidas: list[str] = []
         for c, w in aportes:
-            if c <= 0.02 or any(p in _VACIAS or p.isdigit() or len(p) < 3 for p in w.split()):
+            if c <= 0.02 or any(p in _VACIAS or p.isdigit() or len(p) < 3 or p in _MARCADORES for p in w.split()):
                 continue
             if any(w in e or e in w for e in elegidas):        # evita «cuenta» si ya está «su cuenta»
                 continue
@@ -100,22 +118,26 @@ class ModeloTextoLineal:
 
 
 class ClasificadorContenidoLineal:
-    def __init__(self, modelos: dict[str, ModeloTextoLineal], modelo_id: int | None = None):
+    def __init__(self, modelos: dict[str, ModeloTextoLineal], modelo_id: int | None = None,
+                 umbral_medio: float = 0.3, umbral_alto: float = UMBRAL_ALTO):
         self.modelo_id = modelo_id
         self._modelos = modelos
+        self._umbral_medio = umbral_medio
+        self._umbral_alto = umbral_alto
 
     def evaluar(self, asunto: str, cuerpo: str) -> EvaluacionContenido | None:
-        texto = f"{asunto} {cuerpo}"
-        idioma = detectar_idioma(texto)
+        idioma = detectar_idioma(f"{asunto} {cuerpo}")
         modelo = self._modelos.get(idioma)
         if modelo is None:
             return None
+        texto = modelo.preparar(asunto, cuerpo)
         p = modelo.probabilidad(texto)
         razones = []
-        if p >= 0.5:
+        if p >= self._umbral_medio:
             palabras = modelo.palabras_clave(texto)
             detalle = (": usa expresiones como " + ", ".join(f"«{w}»" for w in palabras)) if palabras else ""
-            gravedad = Gravedad.ALTA if p >= UMBRAL_ALTO else Gravedad.MEDIA
+            gravedad = Gravedad.ALTA if p >= self._umbral_alto else Gravedad.MEDIA
             razones.append(Razon(Area.CONTENIDO, gravedad,
                                  f"El texto se parece a correos de phishing conocidos{detalle}.", aporte=round(p, 4)))
-        return EvaluacionContenido(probabilidad=p, razones=razones, idioma=idioma)
+        return EvaluacionContenido(probabilidad=p, razones=razones, idioma=idioma,
+                                   umbral_medio=self._umbral_medio, umbral_alto=self._umbral_alto)

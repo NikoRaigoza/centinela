@@ -38,7 +38,7 @@ def entorno(config, limpiar, motor_owner):
     auth = AutorizacionFalsa(proveedor)
     c = construir(config, autorizacion=auth, proveedor=proveedor)
     with c.uow() as uow:                                     # registra los modelos reales del repositorio
-        for carpeta in (MODELOS / "enlaces" / "v3-prototipo", MODELOS / "contenido" / "v1-prototipo"):
+        for carpeta in (MODELOS / "enlaces" / "v3-prototipo", MODELOS / "contenido" / "v2-corpus-combinado"):
             m = leer_manifiesto(carpeta)
             uow.modelos.registrar(ModeloRegistrado(0, m["tipo"], m["nombre"], m["version"],
                                                    str(carpeta.relative_to(MODELOS)), sha256_archivo(carpeta / MANIFIESTO),

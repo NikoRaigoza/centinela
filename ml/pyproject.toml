@@ -10,7 +10,11 @@ dependencies = [
     "xgboost>=3.0",
     "lightgbm>=4.5",
     "scipy>=1.14",
+    "centinela",
 ]
 
 [tool.uv]
 package = false
+
+[tool.uv.sources]
+centinela = { path = "../backend", editable = true }
