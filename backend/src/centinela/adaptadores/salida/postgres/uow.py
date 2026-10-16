@@ -15,6 +15,14 @@ from centinela.adaptadores.salida.postgres.repositorios import (
     RepoSesionesSql,
     RepoUsuariosSql,
 )
+from centinela.adaptadores.salida.postgres.repositorios_analisis import (
+    RepoAnalisisSql,
+    RepoAvisosSql,
+    RepoCasosSql,
+    RepoEntidadesSql,
+    RepoModelosSql,
+    RepoRetroalimentacionSql,
+)
 
 
 def crear_motor(url: str) -> Engine:
@@ -32,6 +40,12 @@ class UnidadDeTrabajoSql:
         self.codigos_recuperacion = RepoCodigosRecuperacionSql(self._s)
         self.buzones = RepoBuzonesSql(self._s)
         self.mensajes = RepoMensajesSql(self._s)
+        self.modelos = RepoModelosSql(self._s)
+        self.entidades = RepoEntidadesSql(self._s)
+        self.analisis = RepoAnalisisSql(self._s)
+        self.casos = RepoCasosSql(self._s)
+        self.avisos = RepoAvisosSql(self._s)
+        self.retroalimentacion = RepoRetroalimentacionSql(self._s)
         self.configuracion = RepoConfiguracionSql(self._s)
         self.auditoria = RegistroAuditoriaSql(self._s)
         return self

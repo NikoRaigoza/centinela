@@ -203,7 +203,7 @@ class _RepoMensajes:
     def existe(self, buzon_id, gmail_id):
         return (buzon_id, gmail_id) in self.a.mensajes
 
-    def agregar(self, m):
+    def agregar(self, m, idioma="es"):
         if (m.buzon_id, m.gmail_id) in self.a.mensajes:
             return None
         m.id = len(self.a.mensajes) + 1

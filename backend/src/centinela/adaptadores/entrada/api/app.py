@@ -10,6 +10,7 @@ from sqlalchemy import text
 from centinela.adaptadores.entrada.api.rutas_acceso import auth, cuenta
 from centinela.adaptadores.entrada.api.rutas_admin import admin
 from centinela.adaptadores.entrada.api.rutas_buzones import admin_buzones, buzones, gmail
+from centinela.adaptadores.entrada.api.rutas_casos import analisis, casos
 from centinela.contenedor import Contenedor, construir
 from centinela.dominio import errores as e
 
@@ -76,4 +77,6 @@ def crear_app(contenedor: Contenedor | None = None) -> FastAPI:
     app.include_router(buzones)
     app.include_router(gmail)
     app.include_router(admin_buzones)
+    app.include_router(casos)
+    app.include_router(analisis)
     return app

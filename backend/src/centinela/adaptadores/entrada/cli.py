@@ -63,12 +63,47 @@ def _worker(args: argparse.Namespace) -> int:
                 # Solo cifras: los registros nunca incluyen remitentes ni asuntos (privacidad).
                 if r.nuevos or r.error:
                     log.info("buzón %s: %s nuevos, %s omitidos, estado=%s", r.buzon_id, r.nuevos, r.omitidos, r.estado)
+            if enviados := c.enviar_avisos.ejecutar():
+                log.info("%s aviso(s) entregados", enviados)
         except Exception:
             log.exception("Falló un ciclo de revisión; se reintenta en el siguiente")
         if args.una_vez:
             break
         parar.wait(max(1.0, args.pausa - (time.monotonic() - inicio)))
     log.info("Worker detenido")
+    return 0
+
+
+def _modelos(args: argparse.Namespace) -> int:
+    from pathlib import Path
+
+    from centinela.adaptadores.salida.ml.registro import MANIFIESTO, leer_manifiesto, sha256_archivo, verificar
+    from centinela.aplicacion.puertos import ModeloRegistrado
+    from centinela.contenedor import construir
+
+    c = construir()
+    if args.accion == "listar":
+        with c.uow() as uow:
+            for m in uow.modelos.listar():
+                print(f"{'● activo' if m.activo else '  -     '}  #{m.id} {m.tipo:9s} {m.version:16s} {m.nombre}")
+        return 0
+    carpeta = Path(args.carpeta).resolve()
+    try:
+        ruta = carpeta.relative_to(c.config.dir_modelos.resolve())
+    except ValueError:
+        print(f"La carpeta debe estar dentro de {c.config.dir_modelos}", file=sys.stderr)
+        return 1
+    sha = sha256_archivo(carpeta / MANIFIESTO)
+    verificar(carpeta, sha)                       # todos los archivos coinciden con el manifiesto
+    m = leer_manifiesto(carpeta)
+    with c.uow() as uow:
+        registrado = uow.modelos.registrar(ModeloRegistrado(
+            id=0, tipo=m["tipo"], nombre=m["nombre"], version=m["version"], ruta=str(ruta), sha256=sha,
+            dataset=m["dataset"], umbral_medio=m["umbral_medio"], umbral_alto=m["umbral_alto"], activo=args.activar,
+            metricas=m.get("metricas", {})), activar=args.activar)
+        uow.confirmar()
+    print(f"Modelo registrado (#{registrado.id}, {registrado.tipo} {registrado.version})"
+          + (" y activado." if args.activar else "."))
     return 0
 
 
@@ -91,6 +126,14 @@ def main(argv: list[str] | None = None) -> int:
     w.add_argument("--pausa", type=float, default=5.0, help="segundos entre ciclos (cada buzón respeta su intervalo)")
     w.add_argument("--una-vez", action="store_true", help="hace un solo ciclo y termina")
     w.set_defaults(fn=_worker)
+
+    m = sub.add_parser("modelos", help="Registro de modelos de ML")
+    msub = m.add_subparsers(dest="accion", required=True)
+    msub.add_parser("listar", help="Lista los modelos registrados")
+    r = msub.add_parser("registrar", help="Registra la versión de una carpeta con manifest.json")
+    r.add_argument("carpeta")
+    r.add_argument("--activar", action="store_true", help="la deja como versión activa de su tipo")
+    m.set_defaults(fn=_modelos)
 
     args = p.parse_args(argv)
     return args.fn(args)

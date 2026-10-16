@@ -1,0 +1,16 @@
+[project]
+name = "centinela-ml"
+version = "0.1.0"
+description = "Entrenamiento y evaluación de los modelos de Centinela (experimentos de la tesis)"
+requires-python = ">=3.12"
+dependencies = [
+    "pandas>=2.2",
+    "numpy>=2.1",
+    "scikit-learn>=1.6",
+    "xgboost>=3.0",
+    "lightgbm>=4.5",
+    "scipy>=1.14",
+]
+
+[tool.uv]
+package = false

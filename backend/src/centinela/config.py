@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, SecretStr
@@ -28,6 +29,9 @@ class Configuracion(BaseSettings):
     gmail_client_secret: SecretStr | None = None
     gmail_redirect_uri: str = "http://localhost:8000/api/gmail/callback"
     url_panel: str = "http://localhost:5173"
+
+    # Carpeta de los modelos de ML registrados (ver adaptadores/salida/ml/registro.py)
+    dir_modelos: Path = Path(__file__).resolve().parents[2] / "modelos"
 
     minutos_token_acceso: int = 15
     minutos_desafio_2fa: int = 5

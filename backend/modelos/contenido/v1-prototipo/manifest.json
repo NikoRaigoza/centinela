@@ -1,0 +1,16 @@
+{
+  "tipo": "contenido",
+  "formato": "texto-lineal-v1",
+  "nombre": "TF-IDF + regresión logística (es/en)",
+  "version": "v1-prototipo",
+  "dataset": "es: SpaPhish (1.395 correos); en: Phishing Email Dataset de Kaggle (82.486 correos)",
+  "umbral_medio": 0.3,
+  "umbral_alto": 0.7,
+  "metricas": {
+    "nota": "Provisional hasta el modelo XGBoost de la Fase 3b. Ver legacy/resultados_datasets_correo_para_la_tesis.md"
+  },
+  "archivos": {
+    "en.json": "8af8cf617591b99a3030cefa95cab235076896091ad4d9b03743d1d5e430d6bc",
+    "es.json": "e65ff5b531f13b687bd038571987e7b437cd3102061eb2df7d8d716d65f89311"
+  }
+}

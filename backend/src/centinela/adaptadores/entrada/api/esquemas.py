@@ -138,3 +138,79 @@ class MensajePublico(BaseModel):
         return cls(id=m.id, recibido_en=m.recibido_en, remitente_nombre=m.remitente_nombre,
                    remitente_correo=m.remitente_correo, asunto=m.asunto, n_enlaces=m.n_enlaces, n_adjuntos=m.n_adjuntos,
                    spf=valor(m.spf), dkim=valor(m.dkim), dmarc=valor(m.dmarc))
+
+
+# ---------------------------------------------------------------------- análisis y casos
+class RazonPublica(BaseModel):
+    area: str
+    gravedad: str
+    texto: str
+
+
+class EnlacePublico(BaseModel):
+    dominio: str
+    probabilidad: float | None
+
+
+class ComponentesRiesgo(BaseModel):
+    contenido: float | None
+    enlaces: float | None
+    tecnico: float | None
+
+
+class AnalisisPublico(BaseModel):
+    remitente: str
+    asunto: str
+    idioma: str
+    nivel: str
+    probabilidad: float
+    resumen: str
+    razones: list[RazonPublica]                 # máximo 3: lo que vería el usuario
+    todas_las_razones: list[RazonPublica]
+    senales_positivas: list[str]
+    componentes: ComponentesRiesgo
+    enlaces: list[EnlacePublico]
+    tiempo_ms: int | None
+    modelo_contenido_id: int | None
+    modelo_enlaces_id: int | None
+
+
+class CasoPublico(BaseModel):
+    id: int
+    estado: str
+    nivel: str
+    probabilidad: float
+    resumen: str
+    razones: list[str]
+    buzon: str
+    remitente_nombre: str | None
+    remitente_correo: str | None
+    asunto: str | None
+    recibido_en: datetime
+    puede_liberarse: bool
+
+
+class EventoPublico(BaseModel):
+    tipo: str
+    fecha: datetime
+    autor: str | None
+    detalle: str | None
+
+
+class DetalleCasoPublico(CasoPublico):
+    spf: str | None
+    dkim: str | None
+    dmarc: str | None
+    todas_las_razones: list[RazonPublica]
+    enlaces: list[EnlacePublico]
+    adjuntos: list[str]
+    historial: list[EventoPublico]
+
+
+class SolicitudClasificacion(BaseModel):
+    decision: str = Field(pattern="^(confirmar|falso_positivo|reabrir)$")
+    comentario: str | None = Field(default=None, max_length=1000)
+
+
+class SolicitudNota(BaseModel):
+    texto: str = Field(min_length=1, max_length=2000)

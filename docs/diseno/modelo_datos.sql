@@ -265,9 +265,10 @@ CREATE TABLE razon (
 CREATE INDEX razon_entidad_idx ON razon (entidad_id) WHERE entidad_id IS NOT NULL;
 
 -- Promesa del producto: como máximo 3 razones visibles por veredicto
-CREATE FUNCTION validar_max_razones() RETURNS trigger LANGUAGE plpgsql AS $$
+-- (Corregido en la migración 0002: esquema explícito y search_path fijo.)
+CREATE FUNCTION validar_max_razones() RETURNS trigger LANGUAGE plpgsql SET search_path = centinela, pg_temp AS $$
 BEGIN
-    IF NEW.mostrada AND (SELECT count(*) FROM razon
+    IF NEW.mostrada AND (SELECT count(*) FROM centinela.razon
                          WHERE veredicto_id = NEW.veredicto_id AND mostrada AND id <> NEW.id) >= 3 THEN
         RAISE EXCEPTION 'Un veredicto no puede mostrar más de 3 razones (veredicto %)', NEW.veredicto_id
             USING ERRCODE = 'check_violation';

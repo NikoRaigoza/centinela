@@ -17,6 +17,8 @@ dependencies = [
     "cryptography>=43",
     "pyjwt>=2.10",
     "httpx>=0.28",
+    "xgboost>=3.0",
+    "numpy>=2.1",
 ]
 
 [project.scripts]

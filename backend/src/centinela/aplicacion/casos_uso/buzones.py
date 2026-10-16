@@ -12,6 +12,7 @@ import secrets
 from dataclasses import dataclass
 from datetime import timedelta
 
+from centinela.aplicacion.casos_uso.analisis import MotorAnalisis
 from centinela.aplicacion.casos_uso.comun import SIN_CONTEXTO, CasoDeUso, Contexto, admin_activo, usuario_activo
 from centinela.aplicacion.puertos import (
     AccesoCorreoRevocado,
@@ -26,11 +27,14 @@ from centinela.aplicacion.puertos import (
     PermisoInsuficiente,
     ProveedorCorreo,
     Reloj,
+    ResultadoAnalisis,
     UnidadDeTrabajo,
 )
 from centinela.dominio.buzon import Buzon, EstadoBuzon, ModoCuarentena
+from centinela.dominio.caso import Caso, EstadoCaso
 from centinela.dominio.correo import Mensaje, ResumenMensaje
 from centinela.dominio.errores import Conflicto, DatoInvalido, NoEncontrado, ServicioNoDisponible
+from centinela.dominio.politica import Acciones, decidir_acciones
 
 log = logging.getLogger(__name__)
 
@@ -210,11 +214,12 @@ class ListarMensajes(CasoDeUso):
 # ---------------------------------------------------------------------- revisión (worker)
 class RevisarBuzon(CasoDeUso):
     def __init__(self, uow: FabricaUnidadDeTrabajo, reloj: Reloj, proveedor: ProveedorCorreo | None,
-                 lector: LectorCorreo, cifrador: Cifrador):
+                 lector: LectorCorreo, cifrador: Cifrador, motor: MotorAnalisis | None = None):
         super().__init__(uow, reloj)
         self._proveedor = proveedor
         self._lector = lector
         self._cifrador = cifrador
+        self._motor = motor
 
     def ejecutar(self, buzon_id: int, solicitado_por: int | None = None) -> ResumenRevision:
         if self._proveedor is None:
@@ -256,10 +261,13 @@ class RevisarBuzon(CasoDeUso):
 
     def _ingerir(self, cliente, buzon: Buzon, ids: list[str]) -> tuple[int, int]:
         nuevos = omitidos = 0
+        catalogo = None
         for gmail_id in ids:
             with self._uow() as uow:
                 if uow.mensajes.existe(buzon.id, gmail_id):
                     continue
+                if catalogo is None and self._motor is not None:
+                    catalogo = uow.entidades.catalogo()
             try:
                 crudo = cliente.obtener(gmail_id)
             except MensajeNoDisponible:
@@ -274,12 +282,45 @@ class RevisarBuzon(CasoDeUso):
                 continue
             mensaje = Mensaje(buzon_id=buzon.id, gmail_id=gmail_id, gmail_hilo_id=crudo.hilo_id,
                               recibido_en=crudo.recibido_en, tamano_bytes=crudo.tamano_bytes, correo=correo)
-            with self._uow() as uow:
-                if uow.mensajes.agregar(mensaje) is not None:
-                    nuevos += 1
-                uow.confirmar()
-            # Fase 3: aquí se analiza el mensaje (veredicto, cuarentena y aviso).
+            resultado = self._motor.analizar(correo, catalogo) if (self._motor and correo) else None
+            acciones = (decidir_acciones(resultado.veredicto.nivel, buzon.modo, buzon.avisar_por_correo)
+                        if resultado else Acciones())
+            # 1) Primero la acción en Gmail: si falla, no se guarda nada y la próxima revisión lo reintenta entero.
+            try:
+                self._aplicar_en_gmail(cliente, buzon, gmail_id, acciones)
+            except MensajeNoDisponible:
+                omitidos += 1
+                continue
+            # 2) Luego, el registro completo en UNA transacción (mensaje, veredicto, caso y aviso).
+            if self._registrar(buzon, mensaje, resultado, acciones):
+                nuevos += 1
         return nuevos, omitidos
+
+    @staticmethod
+    def _aplicar_en_gmail(cliente, buzon: Buzon, gmail_id: str, acciones: Acciones) -> None:
+        if acciones.cuarentena:
+            cliente.modificar_etiquetas(gmail_id, agregar=[buzon.etiqueta_cuarentena_id], quitar=["INBOX"])
+        elif acciones.etiquetar_sospechoso:
+            cliente.modificar_etiquetas(gmail_id, agregar=[buzon.etiqueta_sospechoso_id], quitar=[])
+
+    def _registrar(self, buzon: Buzon, mensaje: Mensaje, resultado: ResultadoAnalisis | None, acciones: Acciones) -> bool:
+        ahora = self._reloj.ahora()
+        with self._uow() as uow:
+            mensaje_id = uow.mensajes.agregar(mensaje, resultado.idioma if resultado else "otro")
+            if mensaje_id is None:
+                return False
+            if resultado is not None:
+                uow.analisis.guardar(mensaje_id, resultado)
+                if resultado.veredicto.amerita_caso:
+                    caso = Caso.abrir(mensaje_id, ahora)
+                    if acciones.cuarentena:
+                        caso.transicionar(EstadoCaso.EN_CUARENTENA, ahora,
+                                          detalle="Centinela lo movió a cuarentena automáticamente.")
+                    caso = uow.casos.agregar(caso)
+                    if acciones.avisar:
+                        uow.avisos.agregar(caso.id, "correo", buzon.correo_gmail)
+            uow.confirmar()
+        return True
 
     def _cerrar(self, buzon: Buzon, cambio, accion: str | None) -> ResumenRevision:
         with self._uow() as uow:

@@ -8,12 +8,22 @@ import httpx
 from sqlalchemy import Engine
 
 from centinela.adaptadores.entrada.api.tokens import EmisorTokens
+from centinela.adaptadores.salida.avisos import RedactorAvisosMime
 from centinela.adaptadores.salida.gmail import AutorizacionGoogle, ProveedorGmail
 from centinela.adaptadores.salida.lector_correo import LectorCorreoMime
+from centinela.adaptadores.salida.ml.registro import ProveedorModelosRegistrados
 from centinela.adaptadores.salida.postgres.uow import FabricaUnidadDeTrabajoSql, crear_motor
 from centinela.adaptadores.salida.seguridad import CifradorFernet, HasherArgon2, RelojSistema, ServicioTotpPyotp
-from centinela.aplicacion.casos_uso import acceso, buzones
-from centinela.aplicacion.puertos import AutorizacionCorreo, Cifrador, FabricaUnidadDeTrabajo, ProveedorCorreo, Reloj
+from centinela.aplicacion.casos_uso import acceso, analisis, buzones, casos
+from centinela.aplicacion.puertos import (
+    AutorizacionCorreo,
+    Cifrador,
+    FabricaUnidadDeTrabajo,
+    LectorCorreo,
+    ProveedorCorreo,
+    ProveedorModelos,
+    Reloj,
+)
 from centinela.config import Configuracion, obtener_configuracion
 
 
@@ -48,6 +58,16 @@ class Contenedor:
     listar_mensajes: buzones.ListarMensajes
     revisar_buzon: buzones.RevisarBuzon
     revisar_pendientes: buzones.RevisarBuzonesPendientes
+    # análisis y casos
+    lector: LectorCorreo
+    modelos: ProveedorModelos
+    analizar_manual: analisis.AnalizarCorreoManual
+    listar_casos: casos.ListarCasos
+    ver_caso: casos.VerCaso
+    liberar_correo: casos.LiberarCorreo
+    clasificar_caso: casos.ClasificarCaso
+    nota_caso: casos.AgregarNotaCaso
+    enviar_avisos: casos.EnviarAvisosPendientes
 
 
 def clave_avisos(llave_cifrado: str) -> bytes:
@@ -72,7 +92,9 @@ def construir(config: Configuracion | None = None, autorizacion: AutorizacionCor
         autorizacion = autorizacion or AutorizacionGoogle(config.gmail_client_id, secreto, config.gmail_redirect_uri, http)
         proveedor = proveedor or ProveedorGmail(config.gmail_client_id, secreto, http, reloj)
     lector = LectorCorreoMime(clave_avisos(llave))
-    revisar = buzones.RevisarBuzon(uow, reloj, proveedor, lector, cifrador)
+    modelos = ProveedorModelosRegistrados(uow, config.dir_modelos)
+    motor_analisis = analisis.MotorAnalisis(modelos)
+    revisar = buzones.RevisarBuzon(uow, reloj, proveedor, lector, cifrador, motor_analisis)
     return Contenedor(
         config=config, motor=motor, uow=uow, reloj=reloj, cifrador=cifrador,
         tokens=EmisorTokens(config.jwt_secreto.get_secret_value(), config.minutos_token_acceso,
@@ -98,4 +120,13 @@ def construir(config: Configuracion | None = None, autorizacion: AutorizacionCor
         listar_mensajes=buzones.ListarMensajes(uow, reloj),
         revisar_buzon=revisar,
         revisar_pendientes=buzones.RevisarBuzonesPendientes(uow, reloj, revisar),
+        lector=lector, modelos=modelos,
+        analizar_manual=analisis.AnalizarCorreoManual(uow, reloj, lector, motor_analisis),
+        listar_casos=casos.ListarCasos(uow, reloj),
+        ver_caso=casos.VerCaso(uow, reloj),
+        liberar_correo=casos.LiberarCorreo(uow, reloj, proveedor, cifrador),
+        clasificar_caso=casos.ClasificarCaso(uow, reloj),
+        nota_caso=casos.AgregarNotaCaso(uow, reloj),
+        enviar_avisos=casos.EnviarAvisosPendientes(uow, reloj, proveedor, cifrador,
+                                                   RedactorAvisosMime(clave_avisos(llave), config.url_panel)),
     )

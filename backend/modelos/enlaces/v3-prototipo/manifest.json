@@ -1,0 +1,15 @@
+{
+  "tipo": "enlaces",
+  "formato": "xgboost-url-v3",
+  "nombre": "XGBoost enlaces (57 características léxicas)",
+  "version": "v3-prototipo",
+  "dataset": "Phishing Site URLs + Phishing.Database + dominios populares; recalibrado con enlaces de correos (prototipo)",
+  "umbral_medio": 0.3,
+  "umbral_alto": 0.7,
+  "metricas": {
+    "nota": "Ver legacy/resultados_phishing_para_la_tesis.md (modelo base: F1 0.900, AUC 0.979)"
+  },
+  "archivos": {
+    "modelo.json": "f09639965d3cc7bb24a5b181658316faa5aaca22134de5d828b77114a2017c9f"
+  }
+}

@@ -213,7 +213,7 @@ class RepoMensajesSql:
         return self._s.scalar(select(MensajeAnalizadoFila.id).where(
             MensajeAnalizadoFila.buzon_id == buzon_id, MensajeAnalizadoFila.gmail_id == gmail_id)) is not None
 
-    def agregar(self, mensaje: Mensaje) -> int | None:
+    def agregar(self, mensaje: Mensaje, idioma: str = "es") -> int | None:
         c = mensaje.correo
         auth = c.autenticacion if c and c.autenticacion.confiable else None    # solo lo que certificó Google
         valores = {
@@ -225,6 +225,7 @@ class RepoMensajesSql:
             "remitente_dominio": c.remitente_dominio or None if c else None,
             "responder_a_dominio": c.responder_a_dominio if c else None,
             "asunto": c.asunto if c else None,
+            "idioma": idioma if idioma in ("es", "en") else "otro",
             "n_enlaces": min(len(c.enlaces), 32767) if c else 0,
             "n_adjuntos": min(len(c.adjuntos), 32767) if c else 0,
             "spf": auth.spf.value if auth and auth.spf else None,

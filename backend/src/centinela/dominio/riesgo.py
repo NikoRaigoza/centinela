@@ -99,3 +99,57 @@ class Veredicto:
     @property
     def amerita_caso(self) -> bool:
         return self.nivel in (NivelRiesgo.MEDIO, NivelRiesgo.ALTO)
+
+
+# ---------------------------------------------------------------------- combinación del riesgo
+UMBRAL_MEDIO = 0.30
+UMBRAL_ALTO = 0.70
+PESO_GRAVEDAD = {Gravedad.ALTA: 0.45, Gravedad.MEDIA: 0.20, Gravedad.BAJA: 0.07}
+PESO_ENLACES = 0.6        # los enlaces apoyan pero no mandan: solos llegan a riesgo MEDIO, no a ALTO
+BONO_CONCORDANCIA = 0.05  # cada componente adicional que también ve riesgo suma un poco
+TOPE = 0.99
+FACTOR_REMITENTE_VERIFICADO = 0.5   # remitente oficial de una entidad del catálogo, verificado por DMARC
+
+
+@dataclass(frozen=True)
+class RiesgoCombinado:
+    p_final: float
+    p_tecnico: float | None
+
+
+def combinar_riesgo(p_contenido: float | None, p_enlaces: float | None, razones_tecnicas: list[Razon],
+                    remitente_verificado: bool = False) -> RiesgoCombinado:
+    """Combina tres fuentes independientes. Regla documentada en la tesis (criterio experto, no aprendida):
+
+    * técnico = 1 - ∏(1 - peso de cada señal) → varias señales medias suman, sin pasar de 1.
+    * final = máximo de (contenido, 0.6·enlaces, técnico) + 0.05 por cada fuente extra que supera 0.5.
+    Las razones de CONTENIDO no entran al técnico: el riesgo del texto lo estima el modelo.
+    * Si el remitente es un dominio oficial de una entidad del catálogo verificado por DMARC y no hay ninguna
+      señal técnica en contra, el riesgo se multiplica por 0.5: el texto solo no basta para acusar a la DIAN
+      real de phishing. Un texto muy sospechoso (≥ 0.6) sigue quedando al menos en riesgo MEDIO.
+    """
+    tecnicas = [r for r in razones_tecnicas if r.area is not Area.CONTENIDO]
+    p_tec = None
+    if tecnicas:
+        producto = 1.0
+        for r in tecnicas:
+            producto *= 1.0 - PESO_GRAVEDAD[r.gravedad]
+        p_tec = 1.0 - producto
+    componentes = [p for p in (p_contenido, PESO_ENLACES * p_enlaces if p_enlaces is not None else None, p_tec)
+                   if p is not None]
+    if not componentes:
+        return RiesgoCombinado(0.0, None)
+    concordancia = sum(1 for p in componentes if p >= 0.5)
+    final = min(TOPE, max(componentes) + BONO_CONCORDANCIA * max(0, concordancia - 1))
+    if remitente_verificado and p_tec is None:
+        final *= FACTOR_REMITENTE_VERIFICADO
+    return RiesgoCombinado(round(final, 4), round(p_tec, 4) if p_tec is not None else None)
+
+
+def redactar_resumen(nivel: NivelRiesgo, razones_visibles: list[Razon], nombre_entidad: str | None = None) -> str:
+    if nivel is NivelRiesgo.ALTO:
+        base = "Este correo tiene señales claras de phishing"
+        return base + (f": suplanta a {nombre_entidad}." if nombre_entidad else ".")
+    if nivel is NivelRiesgo.MEDIO:
+        return "Este correo tiene algunas señales de riesgo. Revísalo con cuidado antes de abrir enlaces o adjuntos."
+    return "No encontramos señales de riesgo importantes."

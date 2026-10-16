@@ -10,7 +10,10 @@ from datetime import datetime
 from typing import Any, Protocol, Self
 
 from centinela.dominio.buzon import Buzon, EtiquetasCentinela
+from centinela.dominio.caso import Caso
 from centinela.dominio.correo import CorreoParseado, Mensaje, ResumenMensaje
+from centinela.dominio.entidades import CatalogoEntidades
+from centinela.dominio.riesgo import Razon, Veredicto
 from centinela.dominio.sesion import Sesion
 from centinela.dominio.usuario import EstadoCuenta, Usuario
 
@@ -112,6 +115,57 @@ class LectorCorreo(Protocol):
     def leer(self, crudo: bytes) -> CorreoParseado: ...
 
 
+# ---------------------------------------------------------------------- modelos de machine learning
+@dataclass(frozen=True)
+class EvaluacionContenido:
+    probabilidad: float
+    razones: list[Razon]
+    idioma: str
+
+
+@dataclass(frozen=True)
+class EvaluacionEnlace:
+    url: str
+    dominio: str
+    probabilidad: float | None        # None si el modelo no aplica (p. ej. enlace acortado)
+
+
+class ClasificadorContenido(Protocol):
+    modelo_id: int | None
+    def evaluar(self, asunto: str, cuerpo: str) -> EvaluacionContenido | None:
+        """None si no hay un modelo para el idioma del correo o el texto es muy corto."""
+        ...
+
+
+class ClasificadorEnlaces(Protocol):
+    modelo_id: int | None
+    def evaluar(self, urls: list[str]) -> list[EvaluacionEnlace]: ...
+
+
+class ProveedorModelos(Protocol):
+    """Entrega los modelos ACTIVOS del registro (tabla modelo_ml), verificando la integridad de sus archivos."""
+    def contenido(self) -> ClasificadorContenido | None: ...
+    def enlaces(self) -> ClasificadorEnlaces | None: ...
+
+
+# ---------------------------------------------------------------------- avisos
+@dataclass(frozen=True)
+class DatosAviso:
+    destinatario: str
+    nivel: str
+    remitente: str
+    asunto: str
+    resumen: str
+    razones: list[str]
+    accion: str               # lo que hizo Centinela (cuarentena, etiqueta, nada)
+
+
+class RedactorAvisos(Protocol):
+    def redactar(self, datos: DatosAviso) -> bytes:
+        """Mensaje MIME listo para insertar en el buzón, firmado para que Centinela no se analice a sí mismo."""
+        ...
+
+
 # ---------------------------------------------------------------------- persistencia
 class RepoUsuarios(Protocol):
     def por_id(self, usuario_id: int) -> Usuario | None: ...
@@ -147,10 +201,139 @@ class RepoBuzones(Protocol):
 
 class RepoMensajes(Protocol):
     def existe(self, buzon_id: int, gmail_id: str) -> bool: ...
-    def agregar(self, mensaje: Mensaje) -> int | None:
+    def agregar(self, mensaje: Mensaje, idioma: str = "es") -> int | None:
         """Guarda el mensaje; devuelve None si ya estaba (idempotente)."""
         ...
     def recientes(self, buzon_id: int, limite: int) -> list[ResumenMensaje]: ...
+
+
+@dataclass(frozen=True)
+class ModeloRegistrado:
+    id: int
+    tipo: str
+    nombre: str
+    version: str
+    ruta: str
+    sha256: str
+    dataset: str
+    umbral_medio: float
+    umbral_alto: float
+    activo: bool
+    metricas: dict[str, Any]
+    creado_en: datetime | None = None
+
+
+class RepoModelos(Protocol):
+    def activo(self, tipo: str) -> ModeloRegistrado | None: ...
+    def listar(self) -> list[ModeloRegistrado]: ...
+    def registrar(self, modelo: ModeloRegistrado, activar: bool) -> ModeloRegistrado: ...
+
+
+class RepoEntidades(Protocol):
+    def catalogo(self) -> CatalogoEntidades: ...
+
+
+@dataclass(frozen=True)
+class ResultadoAnalisis:
+    veredicto: Veredicto
+    enlaces: list[EvaluacionEnlace]
+    positivas: list[str]
+    idioma: str
+    modelo_contenido_id: int | None = None
+    modelo_enlaces_id: int | None = None
+
+
+class RepoAnalisis(Protocol):
+    def guardar(self, mensaje_id: int, resultado: ResultadoAnalisis) -> int: ...
+
+
+@dataclass(frozen=True)
+class ContextoCaso:
+    """Lo necesario para autorizar y actuar sobre un caso en Gmail."""
+    caso_id: int
+    usuario_id: int
+    buzon_id: int
+    gmail_id: str
+    mensaje_id: int
+
+
+@dataclass(frozen=True)
+class ResumenCaso:
+    id: int
+    estado: str
+    creado_en: datetime
+    buzon_correo: str
+    remitente_nombre: str | None
+    remitente_correo: str | None
+    asunto: str | None
+    recibido_en: datetime
+    nivel: str
+    p_final: float
+    resumen: str
+    razones: list[str]
+
+
+@dataclass(frozen=True)
+class EnlaceGuardado:
+    dominio: str
+    probabilidad: float | None
+    enganoso: bool
+
+
+@dataclass(frozen=True)
+class AdjuntoGuardado:
+    nombre: str
+    tipo_mime: str | None
+    tamano_bytes: int | None
+
+
+@dataclass(frozen=True)
+class EventoGuardado:
+    tipo: str
+    creado_en: datetime
+    autor: str | None
+    detalle: str | None
+
+
+@dataclass(frozen=True)
+class DetalleCaso:
+    resumen: ResumenCaso
+    spf: str | None
+    dkim: str | None
+    dmarc: str | None
+    todas_las_razones: list[Razon]
+    enlaces: list[EnlaceGuardado]
+    adjuntos: list[AdjuntoGuardado]
+    eventos: list[EventoGuardado]
+
+
+class RepoCasos(Protocol):
+    def agregar(self, caso: Caso) -> Caso: ...
+    def por_id(self, caso_id: int) -> Caso | None: ...
+    def guardar(self, caso: Caso) -> None: ...
+    def contexto(self, caso_id: int) -> ContextoCaso | None: ...
+    def listar(self, usuario_id: int, estados: list[str] | None, limite: int, desde: int) -> list[ResumenCaso]: ...
+    def detalle(self, caso_id: int) -> DetalleCaso | None: ...
+
+
+@dataclass(frozen=True)
+class AvisoPendiente:
+    id: int
+    caso_id: int
+    buzon_id: int
+    intentos: int
+    datos: DatosAviso
+
+
+class RepoAvisos(Protocol):
+    def agregar(self, caso_id: int, canal: str, destino: str) -> None: ...
+    def reclamar_pendientes(self, ahora: datetime, limite: int) -> list[AvisoPendiente]: ...
+    def marcar_enviado(self, aviso_id: int, ahora: datetime, referencia: str) -> None: ...
+    def registrar_fallo(self, aviso_id: int, error: str, proximo_intento: datetime | None) -> None: ...
+
+
+class RepoRetroalimentacion(Protocol):
+    def registrar(self, mensaje_id: int, usuario_id: int, etiqueta: str, comentario: str | None = None) -> None: ...
 
 
 class RepoConfiguracion(Protocol):
@@ -179,6 +362,12 @@ class UnidadDeTrabajo(Protocol):
     codigos_recuperacion: RepoCodigosRecuperacion
     buzones: RepoBuzones
     mensajes: RepoMensajes
+    modelos: RepoModelos
+    entidades: RepoEntidades
+    analisis: RepoAnalisis
+    casos: RepoCasos
+    avisos: RepoAvisos
+    retroalimentacion: RepoRetroalimentacion
     configuracion: RepoConfiguracion
     auditoria: RegistroAuditoria
 
