@@ -16,6 +16,7 @@ dependencies = [
     "pyotp>=2.9",
     "cryptography>=43",
     "pyjwt>=2.10",
+    "httpx>=0.28",
 ]
 
 [project.scripts]
@@ -23,8 +24,8 @@ centinela = "centinela.adaptadores.entrada.cli:main"
 
 [dependency-groups]
 dev = [
+    "httpx2>=2.13.1",
     "pytest>=8.3",
-    "httpx>=0.28",
     "ruff>=0.8",
 ]
 
@@ -46,3 +47,6 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "S"]
 ignore = ["S101"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S105", "S106"]   # las pruebas usan credenciales ficticias a propósito

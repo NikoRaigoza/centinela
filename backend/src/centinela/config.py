@@ -23,6 +23,12 @@ class Configuracion(BaseSettings):
     #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     llave_cifrado: SecretStr
 
+    # Gmail (OAuth2). Se crean en Google Cloud Console > APIs y servicios > Credenciales (aplicación web).
+    gmail_client_id: str | None = None
+    gmail_client_secret: SecretStr | None = None
+    gmail_redirect_uri: str = "http://localhost:8000/api/gmail/callback"
+    url_panel: str = "http://localhost:5173"
+
     minutos_token_acceso: int = 15
     minutos_desafio_2fa: int = 5
     origenes_cors: list[str] = ["http://localhost:5173"]
@@ -30,6 +36,10 @@ class Configuracion(BaseSettings):
     @property
     def cookies_seguras(self) -> bool:
         return self.entorno == "produccion"
+
+    @property
+    def gmail_configurado(self) -> bool:
+        return bool(self.gmail_client_id and self.gmail_client_secret)
 
 
 class ConfiguracionMigraciones(BaseSettings):

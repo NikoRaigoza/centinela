@@ -9,6 +9,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Protocol, Self
 
+from centinela.dominio.buzon import Buzon, EtiquetasCentinela
+from centinela.dominio.correo import CorreoParseado, Mensaje, ResumenMensaje
 from centinela.dominio.sesion import Sesion
 from centinela.dominio.usuario import EstadoCuenta, Usuario
 
@@ -37,6 +39,79 @@ class ServicioTotp(Protocol):
         ...
 
 
+# ---------------------------------------------------------------------- correo (Gmail)
+class ErrorProveedorCorreo(Exception):
+    """Falla pasajera del proveedor (red, cuota, error 5xx). Se reintenta en la siguiente revisión."""
+
+
+class AccesoCorreoRevocado(Exception):
+    """El proveedor ya no acepta el permiso: hay que volver a conectar el buzón."""
+
+
+class HistorialExpirado(Exception):
+    """El punto de avance guardado es demasiado antiguo para el proveedor."""
+
+
+class MensajeNoDisponible(Exception):
+    """El mensaje ya no existe (lo borraron antes de poder leerlo)."""
+
+
+class PermisoInsuficiente(Exception):
+    """La persona no aceptó todos los permisos que Centinela necesita."""
+
+
+@dataclass(frozen=True)
+class CredencialCorreo:
+    refresh_token: str
+    alcances: list[str]
+
+
+@dataclass(frozen=True)
+class PerfilBuzon:
+    correo: str
+    history_id: int
+
+
+@dataclass(frozen=True)
+class CambiosBuzon:
+    ids_nuevos: list[str]
+    history_id: int
+
+
+@dataclass(frozen=True)
+class MensajeCrudo:
+    gmail_id: str
+    hilo_id: str | None
+    recibido_en: datetime
+    tamano_bytes: int
+    etiquetas: list[str]
+    crudo: bytes | None           # None si supera el tamaño máximo que se descarga
+
+
+class AutorizacionCorreo(Protocol):
+    def url_autorizacion(self, estado: str, reto_pkce: str) -> str: ...
+    def intercambiar_codigo(self, codigo: str, verificador_pkce: str) -> CredencialCorreo: ...
+    def revocar(self, refresh_token: str) -> None: ...
+
+
+class ClienteCorreo(Protocol):
+    def perfil(self) -> PerfilBuzon: ...
+    def asegurar_etiquetas(self) -> EtiquetasCentinela: ...
+    def nuevos_desde(self, history_id: int) -> CambiosBuzon: ...
+    def recientes(self, maximo: int) -> list[str]: ...
+    def obtener(self, gmail_id: str) -> MensajeCrudo: ...
+    def modificar_etiquetas(self, gmail_id: str, agregar: list[str], quitar: list[str]) -> None: ...
+    def insertar(self, crudo: bytes, etiquetas: list[str]) -> str: ...
+
+
+class ProveedorCorreo(Protocol):
+    def abrir(self, refresh_token: str) -> ClienteCorreo: ...
+
+
+class LectorCorreo(Protocol):
+    def leer(self, crudo: bytes) -> CorreoParseado: ...
+
+
 # ---------------------------------------------------------------------- persistencia
 class RepoUsuarios(Protocol):
     def por_id(self, usuario_id: int) -> Usuario | None: ...
@@ -56,6 +131,26 @@ class RepoSesiones(Protocol):
 class RepoCodigosRecuperacion(Protocol):
     def reemplazar(self, usuario_id: int, hashes: list[str]) -> None: ...
     def consumir(self, usuario_id: int, codigo_hash: str, ahora: datetime) -> bool: ...
+
+
+class RepoBuzones(Protocol):
+    def por_id(self, buzon_id: int) -> Buzon | None: ...
+    def por_correo(self, correo_gmail: str) -> Buzon | None: ...
+    def de_usuario(self, usuario_id: int) -> list[Buzon]: ...
+    def todos(self) -> list[Buzon]: ...
+    def agregar(self, buzon: Buzon) -> Buzon: ...
+    def guardar(self, buzon: Buzon) -> None: ...
+    def reclamar_pendientes(self, revisados_antes_de: datetime, ahora: datetime, limite: int) -> list[int]:
+        """Marca y devuelve buzones activos que tocan revisar. Seguro con varios workers a la vez."""
+        ...
+
+
+class RepoMensajes(Protocol):
+    def existe(self, buzon_id: int, gmail_id: str) -> bool: ...
+    def agregar(self, mensaje: Mensaje) -> int | None:
+        """Guarda el mensaje; devuelve None si ya estaba (idempotente)."""
+        ...
+    def recientes(self, buzon_id: int, limite: int) -> list[ResumenMensaje]: ...
 
 
 class RepoConfiguracion(Protocol):
@@ -82,6 +177,8 @@ class UnidadDeTrabajo(Protocol):
     usuarios: RepoUsuarios
     sesiones: RepoSesiones
     codigos_recuperacion: RepoCodigosRecuperacion
+    buzones: RepoBuzones
+    mensajes: RepoMensajes
     configuracion: RepoConfiguracion
     auditoria: RegistroAuditoria
 

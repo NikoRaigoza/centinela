@@ -5,6 +5,9 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from centinela.aplicacion.casos_uso.buzones import ResumenRevision
+from centinela.dominio.buzon import Buzon, ModoCuarentena
+from centinela.dominio.correo import ResumenMensaje
 from centinela.dominio.usuario import Usuario
 
 
@@ -74,3 +77,64 @@ class Activacion2FA(BaseModel):
 class Error(BaseModel):
     codigo: str
     mensaje: str
+
+
+# ---------------------------------------------------------------------- buzones
+class UrlAutorizacion(BaseModel):
+    url: str
+
+
+class BuzonPublico(BaseModel):
+    id: int
+    usuario_id: int
+    correo_gmail: str
+    estado: str
+    modo: str
+    avisar_por_correo: bool
+    ultima_revision_en: datetime | None
+    ultimo_error: str | None
+    conectado_en: datetime
+
+    @classmethod
+    def desde(cls, b: Buzon) -> BuzonPublico:
+        return cls(id=b.id, usuario_id=b.usuario_id, correo_gmail=b.correo_gmail, estado=b.estado.value,
+                   modo=b.modo.value, avisar_por_correo=b.avisar_por_correo, ultima_revision_en=b.ultima_revision_en,
+                   ultimo_error=b.ultimo_error, conectado_en=b.conectado_en)
+
+
+class CambiosBuzon(BaseModel):
+    modo: ModoCuarentena | None = None
+    avisar_por_correo: bool | None = None
+    pausado: bool | None = None
+
+
+class ResumenRevisionPublico(BaseModel):
+    buzon_id: int
+    nuevos: int
+    omitidos: int
+    estado: str
+    error: str | None
+
+    @classmethod
+    def desde(cls, r: ResumenRevision) -> ResumenRevisionPublico:
+        return cls(buzon_id=r.buzon_id, nuevos=r.nuevos, omitidos=r.omitidos, estado=r.estado, error=r.error)
+
+
+class MensajePublico(BaseModel):
+    id: int
+    recibido_en: datetime
+    remitente_nombre: str | None
+    remitente_correo: str | None
+    asunto: str | None
+    n_enlaces: int
+    n_adjuntos: int
+    spf: str | None
+    dkim: str | None
+    dmarc: str | None
+
+    @classmethod
+    def desde(cls, m: ResumenMensaje) -> MensajePublico:
+        valor = lambda r: r.value if r else None  # noqa: E731
+        return cls(id=m.id, recibido_en=m.recibido_en, remitente_nombre=m.remitente_nombre,
+                   remitente_correo=m.remitente_correo, asunto=m.asunto, n_enlaces=m.n_enlaces, n_adjuntos=m.n_adjuntos,
+                   spf=valor(m.spf), dkim=valor(m.dkim), dmarc=valor(m.dmarc))

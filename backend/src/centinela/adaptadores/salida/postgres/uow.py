@@ -8,8 +8,10 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from centinela.adaptadores.salida.postgres.repositorios import (
     RegistroAuditoriaSql,
+    RepoBuzonesSql,
     RepoCodigosRecuperacionSql,
     RepoConfiguracionSql,
+    RepoMensajesSql,
     RepoSesionesSql,
     RepoUsuariosSql,
 )
@@ -28,6 +30,8 @@ class UnidadDeTrabajoSql:
         self.usuarios = RepoUsuariosSql(self._s)
         self.sesiones = RepoSesionesSql(self._s)
         self.codigos_recuperacion = RepoCodigosRecuperacionSql(self._s)
+        self.buzones = RepoBuzonesSql(self._s)
+        self.mensajes = RepoMensajesSql(self._s)
         self.configuracion = RepoConfiguracionSql(self._s)
         self.auditoria = RegistroAuditoriaSql(self._s)
         return self

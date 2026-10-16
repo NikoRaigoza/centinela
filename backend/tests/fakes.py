@@ -49,6 +49,8 @@ class Almacen:
     codigos: dict[int, dict[str, datetime | None]] = field(default_factory=dict)
     configuracion: dict[str, Any] = field(default_factory=dict)
     auditoria: list[EventoAuditoria] = field(default_factory=list)
+    buzones: dict[int, Any] = field(default_factory=dict)
+    mensajes: dict[tuple[int, str], Any] = field(default_factory=dict)
 
 
 class _RepoUsuarios:
@@ -135,6 +137,8 @@ class UnidadDeTrabajoFalsa:
         self.codigos_recuperacion = _RepoCodigos(a)
         self.configuracion = _RepoConfiguracion(a)
         self.auditoria = _Auditoria(a)
+        self.buzones = _RepoBuzones(a)
+        self.mensajes = _RepoMensajes(a)
         self.confirmaciones = 0
 
     def __enter__(self):
@@ -156,3 +160,56 @@ class FabricaFalsa:
 
     def __call__(self):
         return UnidadDeTrabajoFalsa(self.almacen)
+
+
+# ---------------------------------------------------------------------- buzones y mensajes en memoria
+class _RepoBuzones:
+    def __init__(self, a: Almacen):
+        self.a = a
+
+    def por_id(self, i):
+        b = self.a.buzones.get(i)
+        return copy.deepcopy(b) if b else None
+
+    def por_correo(self, c):
+        return next((copy.deepcopy(b) for b in self.a.buzones.values() if b.correo_gmail == c), None)
+
+    def de_usuario(self, usuario_id):
+        return [copy.deepcopy(b) for b in self.a.buzones.values() if b.usuario_id == usuario_id]
+
+    def todos(self):
+        return [copy.deepcopy(b) for b in self.a.buzones.values()]
+
+    def agregar(self, b):
+        b.id = len(self.a.buzones) + 1
+        self.a.buzones[b.id] = copy.deepcopy(b)
+        return b
+
+    def guardar(self, b):
+        self.a.buzones[b.id] = copy.deepcopy(b)
+
+    def reclamar_pendientes(self, antes_de, ahora, limite):
+        ids = [b.id for b in self.a.buzones.values() if b.estado.value == "activo"
+               and (b.ultima_revision_en is None or b.ultima_revision_en < antes_de)][:limite]
+        for i in ids:
+            self.a.buzones[i].ultima_revision_en = ahora
+        return ids
+
+
+class _RepoMensajes:
+    def __init__(self, a: Almacen):
+        self.a = a
+
+    def existe(self, buzon_id, gmail_id):
+        return (buzon_id, gmail_id) in self.a.mensajes
+
+    def agregar(self, m):
+        if (m.buzon_id, m.gmail_id) in self.a.mensajes:
+            return None
+        m.id = len(self.a.mensajes) + 1
+        self.a.mensajes[(m.buzon_id, m.gmail_id)] = copy.deepcopy(m)
+        return m.id
+
+    def recientes(self, buzon_id, limite):
+        return [m for (b, _), m in self.a.mensajes.items() if b == buzon_id][:limite]
+

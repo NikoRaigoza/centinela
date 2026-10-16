@@ -9,6 +9,7 @@ from sqlalchemy import text
 
 from centinela.adaptadores.entrada.api.rutas_acceso import auth, cuenta
 from centinela.adaptadores.entrada.api.rutas_admin import admin
+from centinela.adaptadores.entrada.api.rutas_buzones import admin_buzones, buzones, gmail
 from centinela.contenedor import Contenedor, construir
 from centinela.dominio import errores as e
 
@@ -20,6 +21,7 @@ ESTADO_HTTP = {
     e.NoEncontrado: 404,
     e.Conflicto: 409,
     e.TransicionInvalida: 409,
+    e.ServicioNoDisponible: 503,
 }
 
 CABECERAS_SEGURIDAD = {
@@ -39,7 +41,7 @@ def crear_app(contenedor: Contenedor | None = None) -> FastAPI:
     app.state.contenedor = contenedor
 
     app.add_middleware(CORSMiddleware, allow_origins=contenedor.config.origenes_cors, allow_credentials=True,
-                       allow_methods=["GET", "POST", "PUT", "DELETE"], allow_headers=["Authorization", "Content-Type"])
+                       allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"], allow_headers=["Authorization", "Content-Type"])
 
     @app.middleware("http")
     async def cabeceras_seguridad(request: Request, call_next):
@@ -71,4 +73,7 @@ def crear_app(contenedor: Contenedor | None = None) -> FastAPI:
     app.include_router(auth)
     app.include_router(cuenta)
     app.include_router(admin)
+    app.include_router(buzones)
+    app.include_router(gmail)
+    app.include_router(admin_buzones)
     return app

@@ -15,10 +15,10 @@ backend/            API y lógica (Python, FastAPI, arquitectura hexagonal)
     aplicacion/     Puertos (interfaces) y casos de uso
     adaptadores/
       entrada/      API REST y consola
-      salida/       PostgreSQL, criptografía (argon2, TOTP, Fernet)
+      salida/       PostgreSQL, Gmail (OAuth2 + API), lector MIME, criptografía
   migraciones/      Alembic (la migración 0001 crea el esquema completo)
   tests/            Unitarias (sin BD) e integración (PostgreSQL real)
-docs/diseno/        Diseño del modelo de datos
+docs/               Diseño del modelo de datos y guía de conexión con Gmail
 legacy/             Prototipo original en Streamlit (solo referencia)
 docker-compose.yml  Base de datos PostgreSQL en contenedor
 ```
@@ -39,6 +39,7 @@ uv sync
 uv run alembic upgrade head    # crea el esquema
 uv run centinela crear-admin --correo admin@tuempresa.co --nombre "Administración"
 uv run centinela api --recargar   # http://127.0.0.1:8000/api/docs
+uv run centinela worker           # revisa los buzones de Gmail conectados (ver docs/guia_conexion_gmail.md)
 
 # 3. Pruebas
 uv run pytest

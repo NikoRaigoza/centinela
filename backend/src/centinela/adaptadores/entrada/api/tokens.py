@@ -21,6 +21,8 @@ EMISOR = "centinela"
 ACCESO = "acceso"
 VERIFICAR_2FA = "verificar_2fa"
 CONFIGURAR_2FA = "configurar_2fa"
+OAUTH_GMAIL = "oauth_gmail"
+MINUTOS_OAUTH = 10
 
 
 @dataclass(frozen=True)
@@ -28,6 +30,13 @@ class Reclamos:
     usuario_id: int
     tipo: str
     rol: str | None
+
+
+@dataclass(frozen=True)
+class EstadoOAuth:
+    usuario_id: int
+    nonce: str
+    verificador_cifrado: str
 
 
 class EmisorTokens:
@@ -47,6 +56,15 @@ class EmisorTokens:
 
     def desafio(self, usuario: Usuario, tipo: str) -> str:
         return self._emitir(usuario.id, tipo, self._desafio)
+
+    def estado_oauth(self, usuario_id: int, nonce: str, verificador_cifrado: str) -> str:
+        """Parámetro `state` de OAuth: firmado, caduca en 10 min y lleva el verificador PKCE cifrado."""
+        return self._emitir(usuario_id, OAUTH_GMAIL, timedelta(minutes=MINUTOS_OAUTH), nonce=nonce, v=verificador_cifrado)
+
+    def leer_estado_oauth(self, token: str) -> EstadoOAuth:
+        self.leer(token, {OAUTH_GMAIL})
+        datos = jwt.decode(token, self._secreto, algorithms=[ALGORITMO], issuer=EMISOR)
+        return EstadoOAuth(usuario_id=int(datos["sub"]), nonce=datos["nonce"], verificador_cifrado=datos["v"])
 
     @property
     def segundos_acceso(self) -> int:

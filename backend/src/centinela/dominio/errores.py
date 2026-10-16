@@ -35,3 +35,7 @@ class Conflicto(ErrorCentinela):
 
 class TransicionInvalida(ErrorCentinela):
     codigo = "transicion_invalida"
+
+
+class ServicioNoDisponible(ErrorCentinela):
+    codigo = "servicio_no_disponible"
