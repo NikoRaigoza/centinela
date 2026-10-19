@@ -64,7 +64,12 @@ cd frontend && npm test
 - **Notificaciones push** (estándar Web Push, sin Firebase): genera las llaves una sola vez con
   `uv run centinela generar-vapid --contacto mailto:tu@correo.co` y copia las dos líneas que imprime en `backend/.env`.
   Cada persona las activa en **Mi cuenta → Notificaciones**. Las entrega el `worker` (solo correos de riesgo alto).
-  En iPhone solo funcionan si Centinela se agrega a la pantalla de inicio. Si cambias las llaves, hay que reactivarlas.
+  Si cambias las llaves, hay que reactivarlas.
+- **Celulares**: necesitan que el panel se abra por **HTTPS** (en desarrollo, `localhost` solo sirve en el mismo computador).
+  - *Android* (Chrome, Edge, Firefox, Samsung Internet): funcionan desde el navegador, incluso con la pestaña cerrada.
+    También se puede instalar como app («Agregar a la pantalla principal»).
+  - *iPhone / iPad* (iOS 16.4 o posterior): solo si Centinela se agrega a la pantalla de inicio desde Safari
+    (Compartir → Agregar a inicio), se abre desde ese ícono, se inicia sesión ahí y se activan los avisos.
 
 ### Producción
 

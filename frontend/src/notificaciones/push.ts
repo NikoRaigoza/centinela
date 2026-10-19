@@ -11,11 +11,16 @@ export type EstadoPush =
 
 const RUTA_SW = "/sw.js";
 
+/** El iPad moderno se presenta como «Macintosh»: se distingue porque tiene pantalla táctil. */
+export function esIOS(): boolean {
+  return /iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+}
+
 export function pushSoportado(): string | null {
   if (typeof window === "undefined" || !("serviceWorker" in navigator) || !("PushManager" in window) ||
       !("Notification" in window)) {
-    return /iPhone|iPad/.test(navigator.userAgent)
-      ? "En iPhone, primero agrega Centinela a tu pantalla de inicio (Compartir → Agregar a inicio) y ábrelo desde ahí."
+    return esIOS()
+      ? "En iPhone y iPad, primero agrega Centinela a tu pantalla de inicio (Compartir → Agregar a inicio) y ábrelo desde ese ícono. Necesitas iOS 16.4 o posterior."
       : "Este navegador no permite notificaciones push.";
   }
   if (!window.isSecureContext) return "Las notificaciones necesitan una conexión segura (https).";
@@ -55,9 +60,14 @@ export async function estadoPush(clavePublica: string | null): Promise<EstadoPus
   return { tipo: "activo", endpoint: s.endpoint };
 }
 
-/** Pide permiso, suscribe este navegador y lo registra en Centinela. */
+/** Debe llamarse directamente en el clic del botón: Safari (iPhone) solo muestra el permiso dentro de un toque. */
+export function pedirPermiso(): Promise<NotificationPermission> {
+  return Notification.requestPermission();
+}
+
+/** Suscribe este navegador (con el permiso ya concedido) y lo registra en Centinela. */
 export async function activarPush(clavePublica: string): Promise<EstadoPush> {
-  const permiso = await Notification.requestPermission();
+  const permiso = Notification.permission;
   if (permiso !== "granted") return permiso === "denied" ? { tipo: "bloqueado" } : { tipo: "inactivo" };
   const r = await registro();
   await navigator.serviceWorker.ready;

@@ -5,7 +5,7 @@ import { BellOff, BellRing, Send, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ErrorApi, mensajeDeError } from "../api/cliente";
 import { push } from "../api/servicios";
-import { activarPush, desactivarPush, estadoPush, huellaEndpoint, type EstadoPush } from "../notificaciones/push";
+import { activarPush, desactivarPush, estadoPush, huellaEndpoint, pedirPermiso, type EstadoPush } from "../notificaciones/push";
 import { haceCuanto } from "../utilidades/textos";
 import { useTostadas } from "./Tostadas";
 import { Alerta, ErrorCarga, Esqueleto, Girando } from "./ui";
@@ -112,7 +112,8 @@ export function Notificaciones() {
         el panel abierto. El aviso no muestra el asunto ni el remitente: los ves al abrirlo.
       </p>
       <EsteDispositivo estado={estado} ocupado={cambio.isPending}
-        activar={() => cambio.mutate("activar")} desactivar={() => cambio.mutate("desactivar")} />
+        activar={() => void pedirPermiso().then(() => cambio.mutate("activar"), () => cambio.mutate("activar"))}
+        desactivar={() => cambio.mutate("desactivar")} />
       {lista.length > 0 && (
         <div className="pila" style={{ gap: 8 }}>
           <div className="fila-entre">

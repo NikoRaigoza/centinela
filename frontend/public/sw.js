@@ -15,8 +15,8 @@ self.addEventListener("push", (evento) => {
   evento.waitUntil(
     self.registration.showNotification(titulo, {
       body: typeof datos.cuerpo === "string" ? datos.cuerpo : "Tienes un aviso nuevo en Centinela.",
-      icon: "/escudo.svg",
-      badge: "/escudo.svg",
+      icon: "/icono-192.png",       // Android no muestra íconos SVG en las notificaciones
+      badge: "/insignia-96.png",    // silueta para la barra de estado de Android
       tag: typeof datos.etiqueta === "string" ? datos.etiqueta : "centinela",
       renotify: true,
       requireInteraction: true,
