@@ -29,14 +29,15 @@ LEGITIMO = correo(remitente="Laura Gómez <laura.gomez@gmail.com>", asunto="Almu
                   autenticacion="mx.google.com; dkim=pass; spf=pass; dmarc=pass", message_id="<legit@x>")
 
 
-@pytest.fixture
-def entorno(config, limpiar, motor_owner):
+def armar_entorno(config, motor_owner, **inyectados):
+    """Contenedor real sobre la BD de pruebas, con los modelos del repositorio, Gmail simulado y tres cuentas
+    (admin, ana y luis). `inyectados` reemplaza otros servicios externos (push, IA)."""
     with motor_owner.begin() as c:
         c.execute(text("TRUNCATE centinela.modelo_ml RESTART IDENTITY CASCADE"))
     config.dir_modelos = MODELOS
     proveedor, gmail = ProveedorGmailFalso(), BuzonGmailFalso("ana@gmail.com")
     auth = AutorizacionFalsa(proveedor)
-    c = construir(config, autorizacion=auth, proveedor=proveedor)
+    c = construir(config, autorizacion=auth, proveedor=proveedor, **inyectados)
     with c.uow() as uow:                                     # registra los modelos reales del repositorio
         for carpeta in (MODELOS / "enlaces" / "v3-prototipo", MODELOS / "contenido" / "v2-corpus-combinado"):
             m = leer_manifiesto(carpeta)
@@ -50,6 +51,19 @@ def entorno(config, limpiar, motor_owner):
     for u in c.listar_usuarios.ejecutar(admin.id):
         if not u.es_admin:
             c.cambiar_estado_cuenta.ejecutar(admin.id, u.id, AccionCuenta.APROBAR)
+    return c, auth, gmail
+
+
+def conectar_buzon(cli, auth, gmail) -> int:
+    auth.autoriza("cod", gmail)
+    estado = parse_qs(urlparse(cli.post("/api/buzones/conexion").json()["url"]).query)["state"][0]
+    assert cli.get("/api/gmail/callback", params={"state": estado, "code": "cod"}).status_code == 200
+    return cli.get("/api/buzones").json()[0]["id"]
+
+
+@pytest.fixture
+def entorno(config, limpiar, motor_owner):
+    c, auth, gmail = armar_entorno(config, motor_owner)
     yield c, auth, gmail
     c.motor.dispose()
 

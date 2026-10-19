@@ -28,7 +28,7 @@ def test_contenido_inicial(motor_owner):
         vistas = c.scalar(text("SELECT count(*) FROM information_schema.views WHERE table_schema='centinela'"))
         dominio = c.scalar(text("SELECT e.nombre FROM centinela.dominio_oficial d "
                                 "JOIN centinela.entidad_suplantada e ON e.id = d.entidad_id WHERE d.dominio='dian.gov.co'"))
-    assert (tablas, vistas, dominio) == (20, 3, "DIAN")
+    assert (tablas, vistas, dominio) == (21, 3, "DIAN")
 
 
 def test_rol_de_la_app_tiene_permisos_minimos(bd_migrada, limpiar):

@@ -1,6 +1,6 @@
-"""Mapeo SQLAlchemy de las 20 tablas del esquema `centinela`.
+"""Mapeo SQLAlchemy de las 21 tablas del esquema `centinela`.
 
-El esquema lo crea la migración de Alembic (fuente de verdad). Estas clases deben coincidir con ella;
+El esquema lo crean las migraciones de Alembic (fuente de verdad). Estas clases deben coincidir con ella;
 la prueba `test_esquema_sincronizado` lo verifica contra la base de datos real.
 Son modelos de PERSISTENCIA: los repositorios los traducen a entidades del dominio.
 """
@@ -386,6 +386,22 @@ class TurnoChatFila(Base):
     contenido: Mapped[str] = mapped_column(Text)
     proveedor: Mapped[str | None] = mapped_column(PROVEEDOR_IA)
     creado_en: Mapped[datetime] = mapped_column(TS, server_default=AHORA)
+
+
+class SuscripcionPushFila(Base):
+    __tablename__ = "suscripcion_push"
+    __table_args__ = (
+        UniqueConstraint("endpoint", name="suscripcion_endpoint_unico"),
+        Index("suscripcion_usuario_idx", "usuario_id"),
+    )
+    id: Mapped[int] = _id()
+    usuario_id: Mapped[int] = _fk("usuario.id", "CASCADE")
+    endpoint: Mapped[str] = mapped_column(Text)
+    p256dh: Mapped[str] = mapped_column(Text)
+    auth: Mapped[str] = mapped_column(Text)
+    dispositivo: Mapped[str | None] = mapped_column(Text)
+    creado_en: Mapped[datetime] = mapped_column(TS, server_default=AHORA)
+    ultimo_envio_en: Mapped[datetime | None] = mapped_column(TS)
 
 
 # =====================================================================

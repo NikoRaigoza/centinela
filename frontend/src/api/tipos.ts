@@ -174,3 +174,59 @@ export interface Modelo {
   metricas: Record<string, unknown>;
   creado_en: string | null;
 }
+
+export interface ConfiguracionPush {
+  disponible: boolean;
+  clave_publica: string | null;
+}
+
+export interface DispositivoPush {
+  id: number;
+  dispositivo: string;
+  creado_en: string | null;
+  ultimo_envio_en: string | null;
+  endpoint_hash: string;
+}
+
+export interface ResultadoPrueba {
+  entregados: number;
+  vencidas: number;
+  errores: number;
+}
+
+export type ProveedorIA = "gemini" | "local";
+
+export interface Turno {
+  rol: "usuario" | "asistente";
+  contenido: string;
+  proveedor: ProveedorIA | null;
+  creado_en: string;
+}
+
+export interface RespuestaAsistente {
+  conversacion_id: number;
+  turno: Turno;
+  aviso: string | null;
+  restantes_ia: number;
+}
+
+export interface Conversacion {
+  id: number;
+  titulo: string;
+  caso_id: number | null;
+  creado_en: string;
+  actualizado_en: string;
+}
+
+export interface ConversacionDetalle extends Conversacion {
+  turnos: Turno[];
+}
+
+export interface EstadoAsistente {
+  ia_disponible: boolean;
+  proveedor: ProveedorIA;
+  limite_ia: number;
+  restantes_ia: number;
+  sugerencias_generales: string[];
+  sugerencias_caso: string[];
+}

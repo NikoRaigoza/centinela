@@ -1,0 +1,12 @@
+{
+  "name": "Centinela",
+  "short_name": "Centinela",
+  "description": "Protección contra phishing en Gmail",
+  "lang": "es-CO",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0f1f38",
+  "theme_color": "#0f1f38",
+  "icons": [{ "src": "/escudo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

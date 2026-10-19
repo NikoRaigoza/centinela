@@ -1,7 +1,7 @@
 // Detalle de un correo de riesgo: por qué es peligroso, evidencia técnica, historial y decisiones del dueño.
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Inbox, Paperclip, RotateCcw, ShieldAlert, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Bot, Inbox, Paperclip, RotateCcw, ShieldAlert, ShieldCheck } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router";
 import { mensajeDeError } from "../api/cliente";
@@ -137,7 +137,10 @@ export function PaginaCaso() {
       <section className="tarjeta pila" style={{ gap: 18 }}>
         <div className="fila-entre">
           <div className="fila"><InsigniaNivel nivel={c.nivel} /><InsigniaEstado estado={c.estado} /></div>
-          <Acciones caso={c} elegir={setAccion} />
+          <div className="fila">
+            <Link to={`/asistente?caso=${c.id}`} className="boton"><Bot size={16} aria-hidden /> Preguntar al asistente</Link>
+            <Acciones caso={c} elegir={setAccion} />
+          </div>
         </div>
         <div>
           <h1 style={{ overflowWrap: "anywhere" }}>{c.asunto || "(sin asunto)"}</h1>

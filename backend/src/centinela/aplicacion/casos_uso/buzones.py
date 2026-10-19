@@ -35,6 +35,7 @@ from centinela.dominio.caso import Caso, EstadoCaso
 from centinela.dominio.correo import Mensaje, ResumenMensaje
 from centinela.dominio.errores import Conflicto, DatoInvalido, NoEncontrado, ServicioNoDisponible
 from centinela.dominio.politica import Acciones, decidir_acciones
+from centinela.dominio.riesgo import NivelRiesgo
 
 log = logging.getLogger(__name__)
 
@@ -319,6 +320,9 @@ class RevisarBuzon(CasoDeUso):
                     caso = uow.casos.agregar(caso)
                     if acciones.avisar:
                         uow.avisos.agregar(caso.id, "correo", buzon.correo_gmail)
+                    # Push: solo riesgo alto y solo si la persona activó los avisos en algún dispositivo
+                    if resultado.veredicto.nivel is NivelRiesgo.ALTO and uow.suscripciones_push.de_usuario(buzon.usuario_id):
+                        uow.avisos.agregar(caso.id, "push", f"dispositivos del usuario {buzon.usuario_id}")
             uow.confirmar()
         return True
 

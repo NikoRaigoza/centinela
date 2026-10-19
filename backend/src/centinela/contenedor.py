@@ -9,17 +9,21 @@ from sqlalchemy import Engine
 
 from centinela.adaptadores.entrada.api.tokens import EmisorTokens
 from centinela.adaptadores.salida.avisos import RedactorAvisosMime
+from centinela.adaptadores.salida.gemini import AsistenteGemini
 from centinela.adaptadores.salida.gmail import AutorizacionGoogle, ProveedorGmail
 from centinela.adaptadores.salida.lector_correo import LectorCorreoMime
 from centinela.adaptadores.salida.ml.registro import ProveedorModelosRegistrados
 from centinela.adaptadores.salida.postgres.uow import FabricaUnidadDeTrabajoSql, crear_motor
+from centinela.adaptadores.salida.push import EnviadorWebPush, carga_de_aviso
 from centinela.adaptadores.salida.seguridad import CifradorFernet, HasherArgon2, RelojSistema, ServicioTotpPyotp
-from centinela.aplicacion.casos_uso import acceso, analisis, buzones, casos, panel
+from centinela.aplicacion.casos_uso import acceso, analisis, asistente, buzones, casos, notificaciones, panel
 from centinela.aplicacion.puertos import (
     AutorizacionCorreo,
     Cifrador,
+    EnviadorPush,
     FabricaUnidadDeTrabajo,
     LectorCorreo,
+    ModeloLenguaje,
     ProveedorCorreo,
     ProveedorModelos,
     Reloj,
@@ -71,6 +75,14 @@ class Contenedor:
     # panel
     resumen_panel: panel.ObtenerResumenPanel
     listar_modelos: panel.ListarModelos
+    # notificaciones push
+    activar_push: notificaciones.ActivarPush
+    listar_dispositivos_push: notificaciones.ListarDispositivosPush
+    quitar_push: notificaciones.QuitarPush
+    probar_push: notificaciones.ProbarPush
+    # asistente de IA
+    preguntar_asistente: asistente.PreguntarAsistente
+    consultar_asistente: asistente.ConsultarAsistente
 
 
 def clave_avisos(llave_cifrado: str) -> bytes:
@@ -79,8 +91,10 @@ def clave_avisos(llave_cifrado: str) -> bytes:
 
 
 def construir(config: Configuracion | None = None, autorizacion: AutorizacionCorreo | None = None,
-              proveedor: ProveedorCorreo | None = None) -> Contenedor:
-    """`autorizacion` y `proveedor` se pueden inyectar (pruebas); si no, se usan los de Google si están configurados."""
+              proveedor: ProveedorCorreo | None = None, enviador_push: EnviadorPush | None = None,
+              modelo_ia: ModeloLenguaje | None = None) -> Contenedor:
+    """Los servicios externos (Gmail, push, IA) se pueden inyectar en las pruebas; si no, se usan los reales cuando
+    están configurados."""
     config = config or obtener_configuracion()
     motor = crear_motor(config.bd_url)
     uow = FabricaUnidadDeTrabajoSql(motor)
@@ -94,6 +108,12 @@ def construir(config: Configuracion | None = None, autorizacion: AutorizacionCor
         secreto = config.gmail_client_secret.get_secret_value()
         autorizacion = autorizacion or AutorizacionGoogle(config.gmail_client_id, secreto, config.gmail_redirect_uri, http)
         proveedor = proveedor or ProveedorGmail(config.gmail_client_id, secreto, http, reloj)
+    if config.push_configurado and enviador_push is None:
+        enviador_push = EnviadorWebPush(config.vapid_clave_privada.get_secret_value(), config.vapid_contacto,
+                                        httpx.Client(timeout=httpx.Timeout(15.0, connect=10.0)), reloj)
+    if config.ia_configurada and modelo_ia is None:
+        modelo_ia = AsistenteGemini(config.gemini_clave.get_secret_value(), config.gemini_modelo,
+                                    httpx.Client(timeout=httpx.Timeout(30.0, connect=10.0)))
     lector = LectorCorreoMime(clave_avisos(llave))
     modelos = ProveedorModelosRegistrados(uow, config.dir_modelos)
     motor_analisis = analisis.MotorAnalisis(modelos)
@@ -131,7 +151,14 @@ def construir(config: Configuracion | None = None, autorizacion: AutorizacionCor
         clasificar_caso=casos.ClasificarCaso(uow, reloj),
         nota_caso=casos.AgregarNotaCaso(uow, reloj),
         enviar_avisos=casos.EnviarAvisosPendientes(uow, reloj, proveedor, cifrador,
-                                                   RedactorAvisosMime(clave_avisos(llave), config.url_panel)),
+                                                   RedactorAvisosMime(clave_avisos(llave), config.url_panel),
+                                                   enviador_push, carga_de_aviso),
         resumen_panel=panel.ObtenerResumenPanel(uow, reloj),
         listar_modelos=panel.ListarModelos(uow, reloj),
+        activar_push=notificaciones.ActivarPush(uow, reloj, enviador_push),
+        listar_dispositivos_push=notificaciones.ListarDispositivosPush(uow, reloj),
+        quitar_push=notificaciones.QuitarPush(uow, reloj),
+        probar_push=notificaciones.ProbarPush(uow, reloj, enviador_push),
+        preguntar_asistente=asistente.PreguntarAsistente(uow, reloj, modelo_ia),
+        consultar_asistente=asistente.ConsultarAsistente(uow, reloj, modelo_ia),
     )

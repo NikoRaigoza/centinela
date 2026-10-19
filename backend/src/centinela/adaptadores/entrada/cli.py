@@ -2,7 +2,8 @@
 
     uv run centinela crear-admin --correo admin@ejemplo.co --nombre "Administración"
     uv run centinela api            # levanta la API en http://localhost:8000
-    uv run centinela worker         # revisa los buzones conectados cada 30 s
+    uv run centinela worker         # revisa los buzones conectados cada 30 s y entrega los avisos
+    uv run centinela generar-vapid --contacto mailto:admin@ejemplo.co   # llaves de las notificaciones push
 """
 from __future__ import annotations
 
@@ -74,6 +75,21 @@ def _worker(args: argparse.Namespace) -> int:
     return 0
 
 
+def _generar_vapid(args: argparse.Namespace) -> int:
+    from centinela.adaptadores.salida.push import generar_llaves_vapid
+
+    if not args.contacto.startswith(("mailto:", "https://")):
+        print("El contacto debe empezar por mailto: o https://", file=sys.stderr)
+        return 1
+    privada, publica = generar_llaves_vapid()
+    print("# Agrega estas líneas a backend/.env (la llave privada es un secreto: no la compartas ni la subas a git).")
+    print("# Si la cambias después, cada persona deberá activar de nuevo los avisos en sus dispositivos.")
+    print(f"CENTINELA_VAPID_CLAVE_PRIVADA={privada}")
+    print(f"CENTINELA_VAPID_CONTACTO={args.contacto}")
+    print(f"# Llave pública (el panel la obtiene sola de la API): {publica}")
+    return 0
+
+
 def _modelos(args: argparse.Namespace) -> int:
     from pathlib import Path
 
@@ -126,6 +142,10 @@ def main(argv: list[str] | None = None) -> int:
     w.add_argument("--pausa", type=float, default=5.0, help="segundos entre ciclos (cada buzón respeta su intervalo)")
     w.add_argument("--una-vez", action="store_true", help="hace un solo ciclo y termina")
     w.set_defaults(fn=_worker)
+
+    v = sub.add_parser("generar-vapid", help="Genera las llaves para las notificaciones push")
+    v.add_argument("--contacto", required=True, help="mailto:tu@correo.co o https://tu-sitio.co")
+    v.set_defaults(fn=_generar_vapid)
 
     m = sub.add_parser("modelos", help="Registro de modelos de ML")
     msub = m.add_subparsers(dest="accion", required=True)

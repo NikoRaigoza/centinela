@@ -39,3 +39,7 @@ class TransicionInvalida(ErrorCentinela):
 
 class ServicioNoDisponible(ErrorCentinela):
     codigo = "servicio_no_disponible"
+
+
+class LimiteAlcanzado(ErrorCentinela):
+    codigo = "limite_alcanzado"

@@ -6,6 +6,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { fijarAcceso, renovarSesion, suscribirSesion } from "../api/cliente";
 import { auth } from "../api/servicios";
 import type { TokenAcceso, Usuario } from "../api/tipos";
+import { desactivarPush } from "../notificaciones/push";
 
 type Estado = { tipo: "cargando" } | { tipo: "anonimo"; voluntario?: boolean } | { tipo: "autenticado"; usuario: Usuario };
 
@@ -50,6 +51,9 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
 
   const salir = useCallback(async () => {
     try {
+      // Este navegador deja de recibir avisos de la cuenta (importante en un computador compartido).
+      // Con tope de tiempo: un servicio push lento no debe impedir cerrar la sesión.
+      await Promise.race([desactivarPush().catch(() => undefined), new Promise((listo) => setTimeout(listo, 3000))]);
       await auth.cerrar();
     } finally {
       setEstado({ tipo: "anonimo", voluntario: true });      // antes de limpiar: así no se recuerda la página actual

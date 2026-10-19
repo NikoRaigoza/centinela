@@ -61,7 +61,12 @@ def motor_owner(bd_migrada):
 def limpiar(motor_owner):
     """Deja las tablas de datos vacías (conserva catálogo y configuración iniciales)."""
     with motor_owner.begin() as c:
+        # configuracion tiene una FK a usuario: el CASCADE también la vacía, así que se guarda y se restaura
+        config = c.execute(text("SELECT clave, valor::text AS valor, descripcion FROM centinela.configuracion")).mappings().all()
         c.execute(text("TRUNCATE centinela.usuario, centinela.auditoria RESTART IDENTITY CASCADE"))
+        for fila in config:
+            c.execute(text("INSERT INTO centinela.configuracion (clave, valor, descripcion) "
+                           "VALUES (:clave, CAST(:valor AS jsonb), :descripcion)"), dict(fila))
     yield
 
 

@@ -450,3 +450,49 @@ details.plegable[open] > summary { margin-bottom: 12px; }
 .barras-h .cifra { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
 
 .cargando-pantalla { min-height: 100vh; display: grid; place-items: center; color: var(--texto-2); }
+
+/* ------------------------------------------------------------------ notificaciones push */
+.lista-dispositivos { list-style: none; margin: 0; padding: 0; display: grid; border: 1px solid var(--borde); border-radius: var(--radio-sm); }
+.lista-dispositivos li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; flex-wrap: wrap; }
+.lista-dispositivos li + li { border-top: 1px solid var(--borde); }
+
+/* ------------------------------------------------------------------ asistente */
+.pagina-asistente { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 16px; align-items: start; }
+.conversaciones { display: grid; gap: 12px; padding: 14px; position: sticky; top: 16px; max-height: calc(100vh - 140px); overflow-y: auto; }
+.conversaciones ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.conversaciones a { display: grid; gap: 2px; padding: 8px 10px; border-radius: var(--radio-sm); color: var(--texto); text-decoration: none; }
+.conversaciones a:hover { background: var(--superficie-2); }
+.conversaciones a.activa { background: var(--primario-suave); }
+.conversaciones .titulo { font-weight: 600; font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conversaciones .muy-tenue { display: inline-flex; align-items: center; gap: 4px; }
+
+.chat { display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; gap: 12px; min-height: min(640px, calc(100vh - 140px)); padding: 0; }
+.chat-cabecera { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 16px 20px 0; }
+.chat-cabecera .titulo-chat { margin: 0; overflow-wrap: anywhere; }
+.chat-cabecera a.muy-tenue { display: inline-block; margin-top: 2px; overflow-wrap: anywhere; }
+.mensajes { display: flex; flex-direction: column; gap: 12px; padding: 4px 20px; overflow-y: auto; max-height: calc(100vh - 300px); }
+.burbuja { max-width: min(78%, 640px); padding: 10px 14px; border-radius: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.burbuja.usuario { align-self: flex-end; background: var(--primario); color: var(--sobre-primario); border-bottom-right-radius: 4px; white-space: pre-wrap; }
+.burbuja.asistente { align-self: flex-start; background: var(--superficie-2); border: 1px solid var(--borde); border-bottom-left-radius: 4px; }
+.burbuja.escribiendo { display: inline-flex; align-items: center; gap: 8px; color: var(--texto-2); }
+.burbuja .modo-basico { margin-top: 6px; }
+.texto-asistente { display: grid; gap: 8px; }
+.texto-asistente ul, .texto-asistente ol { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
+.chat-vacio { display: grid; justify-items: center; text-align: center; gap: 12px; padding: 32px 8px; color: var(--texto-2); margin: auto 0; }
+.chat-vacio svg { color: var(--primario); }
+.sugerencias { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.redactar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; padding: 0 20px; }
+.redactar textarea { resize: vertical; min-height: 46px; max-height: 200px; }
+.redactar .boton { min-height: 46px; }
+.aviso-ia { padding: 0 20px 16px; }
+.solo-movil { display: none; }
+@media (max-width: 900px) {
+  .pagina-asistente { grid-template-columns: 1fr; }
+  .conversaciones { position: static; max-height: none; }
+  .pagina-asistente.con-chat .conversaciones { display: none; }
+  .solo-movil { display: inline-flex; margin: 0 0 6px -10px; }
+  .mensajes { max-height: none; }
+  .burbuja { max-width: 92%; }
+  .chat-cabecera, .mensajes, .redactar { padding-left: 14px; padding-right: 14px; }
+  .aviso-ia { padding: 0 14px 14px; }
+}

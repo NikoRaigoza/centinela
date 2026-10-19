@@ -2,6 +2,7 @@
 Si el panel React está compilado, también lo sirve (rutas que no empiezan por /api)."""
 from __future__ import annotations
 
+import mimetypes
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -12,6 +13,7 @@ from sqlalchemy import text
 
 from centinela.adaptadores.entrada.api.rutas_acceso import auth, cuenta
 from centinela.adaptadores.entrada.api.rutas_admin import admin
+from centinela.adaptadores.entrada.api.rutas_asistente import asistente, push
 from centinela.adaptadores.entrada.api.rutas_buzones import admin_buzones, buzones, gmail
 from centinela.adaptadores.entrada.api.rutas_casos import analisis, casos
 from centinela.adaptadores.entrada.api.rutas_panel import panel
@@ -27,6 +29,7 @@ ESTADO_HTTP = {
     e.Conflicto: 409,
     e.TransicionInvalida: 409,
     e.ServicioNoDisponible: 503,
+    e.LimiteAlcanzado: 429,
 }
 
 CABECERAS_SEGURIDAD = {
@@ -38,9 +41,11 @@ CABECERAS_SEGURIDAD = {
 
 # El panel no carga nada de terceros: ni fuentes, ni scripts, ni analítica (los correos no salen de la empresa).
 CSP_PANEL = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
-             "connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; "
+             "connect-src 'self'; font-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; "
+             "base-uri 'none'; form-action 'self'; "
              "frame-ancestors 'none'")
 CACHE_INMUTABLE = "public, max-age=31536000, immutable"      # archivos de /assets: llevan hash en el nombre
+mimetypes.add_type("application/manifest+json", ".webmanifest")
 
 
 def crear_app(contenedor: Contenedor | None = None) -> FastAPI:
@@ -92,6 +97,8 @@ def crear_app(contenedor: Contenedor | None = None) -> FastAPI:
     app.include_router(casos)
     app.include_router(analisis)
     app.include_router(panel)
+    app.include_router(asistente)
+    app.include_router(push)
     if contenedor.config.dir_panel and (contenedor.config.dir_panel / "index.html").is_file():
         _servir_panel(app, contenedor.config.dir_panel.resolve())
     return app

@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import {
+  Bot,
   BrainCircuit,
   FileSearch,
   Gauge,
@@ -55,6 +56,7 @@ export function Marco() {
           <Enlace a="/casos" icono={<ShieldAlert size={18} aria-hidden />} contador={porAtender}>Correos de riesgo</Enlace>
           <Enlace a="/buzones" icono={<Inbox size={18} aria-hidden />}>Mis buzones</Enlace>
           <Enlace a="/analizar" icono={<FileSearch size={18} aria-hidden />}>Analizar un correo</Enlace>
+          <Enlace a="/asistente" icono={<Bot size={18} aria-hidden />}>Asistente</Enlace>
           <Enlace a="/cuenta" icono={<UserCog size={18} aria-hidden />}>Mi cuenta</Enlace>
           {esAdmin && (
             <>

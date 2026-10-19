@@ -4,6 +4,7 @@
 import { Navigate, Outlet, createBrowserRouter, useLocation, useSearchParams, type RouteObject } from "react-router";
 import { useSesion } from "../sesion/Sesion";
 import { PaginaAnalizar } from "../paginas/Analizar";
+import { PaginaAsistente } from "../paginas/Asistente";
 import { PaginaBuzones } from "../paginas/Buzones";
 import { PaginaCaso } from "../paginas/Caso";
 import { PaginaCasos } from "../paginas/Casos";
@@ -67,6 +68,7 @@ export const rutas: RouteObject[] = [
       { path: "/casos/:id", element: <PaginaCaso /> },
       { path: "/buzones", element: <PaginaBuzones /> },
       { path: "/analizar", element: <PaginaAnalizar /> },
+      { path: "/asistente", element: <PaginaAsistente /> },
       { path: "/cuenta", element: <PaginaCuenta /> },
       {
         element: <SoloAdmin />,

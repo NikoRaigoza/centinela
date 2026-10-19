@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date, datetime
+from enum import StrEnum
 from typing import Any, Protocol, Self
 
 from centinela.dominio.buzon import Buzon, EtiquetasCentinela
@@ -163,12 +164,53 @@ class DatosAviso:
     razones: list[str]
     accion: str               # lo que hizo Centinela (cuarentena, etiqueta, nada)
     caso_id: int | None = None   # para enlazar directo al caso en el panel
+    en_cuarentena: bool = False
 
 
 class RedactorAvisos(Protocol):
     def redactar(self, datos: DatosAviso) -> bytes:
         """Mensaje MIME listo para insertar en el buzón, firmado para que Centinela no se analice a sí mismo."""
         ...
+
+
+@dataclass(frozen=True)
+class SuscripcionPush:
+    """Un navegador donde la persona activó las notificaciones (estándar Web Push)."""
+    id: int
+    usuario_id: int
+    endpoint: str
+    p256dh: str
+    auth: str
+    dispositivo: str | None = None
+    creado_en: datetime | None = None
+    ultimo_envio_en: datetime | None = None
+
+
+class ResultadoPush(StrEnum):
+    ENTREGADO = "entregado"
+    VENCIDA = "vencida"      # el navegador ya no acepta la suscripción: se borra
+    ERROR = "error"          # falla pasajera: se reintenta
+
+
+class EnviadorPush(Protocol):
+    clave_publica: str       # llave VAPID que el navegador necesita para suscribirse
+    def enviar(self, suscripcion: SuscripcionPush, carga: dict) -> ResultadoPush: ...
+
+
+# ---------------------------------------------------------------------- asistente de IA
+class IANoDisponible(Exception):
+    """El proveedor de IA no respondió (sin clave, sin red, cuota agotada). Se responde en modo local."""
+
+
+@dataclass(frozen=True)
+class TurnoIA:
+    rol: str                 # "usuario" | "asistente"
+    texto: str
+
+
+class ModeloLenguaje(Protocol):
+    proveedor: str           # valor del enum proveedor_ia de la BD
+    def responder(self, instrucciones: str, contexto: str, historial: list[TurnoIA], pregunta: str) -> str: ...
 
 
 # ---------------------------------------------------------------------- persistencia
@@ -343,6 +385,7 @@ class EstadisticasPanel:
 class RepoEstadisticas(Protocol):
     def panel(self, usuario_id: int, desde: datetime, zona: str) -> EstadisticasPanel: ...
 
+
 @dataclass(frozen=True)
 class AvisoPendiente:
     id: int
@@ -350,13 +393,57 @@ class AvisoPendiente:
     buzon_id: int
     intentos: int
     datos: DatosAviso
+    canal: str = "correo"
+    usuario_id: int | None = None
 
 
 class RepoAvisos(Protocol):
     def agregar(self, caso_id: int, canal: str, destino: str) -> None: ...
-    def reclamar_pendientes(self, ahora: datetime, limite: int) -> list[AvisoPendiente]: ...
+    def reclamar_pendientes(self, ahora: datetime, limite: int, canales: list[str]) -> list[AvisoPendiente]: ...
     def marcar_enviado(self, aviso_id: int, ahora: datetime, referencia: str) -> None: ...
     def registrar_fallo(self, aviso_id: int, error: str, proximo_intento: datetime | None) -> None: ...
+
+
+class RepoSuscripcionesPush(Protocol):
+    def guardar(self, usuario_id: int, endpoint: str, p256dh: str, auth: str, dispositivo: str | None) -> None:
+        """Crea o actualiza (si el mismo navegador ya estaba suscrito, pasa a ser de este usuario)."""
+        ...
+    def de_usuario(self, usuario_id: int) -> list[SuscripcionPush]: ...
+    def eliminar(self, usuario_id: int, suscripcion_id: int | None = None, endpoint: str | None = None) -> bool: ...
+    def eliminar_vencida(self, suscripcion_id: int) -> None: ...
+    def marcar_envio(self, suscripcion_id: int, ahora: datetime) -> None: ...
+
+
+@dataclass(frozen=True)
+class Conversacion:
+    id: int
+    usuario_id: int
+    titulo: str | None
+    mensaje_id: int | None
+    caso_id: int | None          # caso del correo, si la conversación se abrió desde uno
+    creado_en: datetime
+    actualizado_en: datetime
+
+
+@dataclass(frozen=True)
+class TurnoChat:
+    rol: str
+    contenido: str
+    proveedor: str | None
+    creado_en: datetime
+
+
+class RepoConversaciones(Protocol):
+    def crear(self, usuario_id: int, mensaje_id: int | None, titulo: str) -> int: ...
+    def por_id(self, conversacion_id: int) -> Conversacion | None: ...
+    def de_usuario(self, usuario_id: int, limite: int) -> list[Conversacion]: ...
+    def turnos(self, conversacion_id: int, ultimos: int | None = None) -> list[TurnoChat]: ...
+    def agregar_turno(self, conversacion_id: int, rol: str, contenido: str, proveedor: str | None) -> None: ...
+    def eliminar(self, conversacion_id: int) -> None: ...
+    def respuestas_ia_desde(self, usuario_id: int, desde: datetime) -> int:
+        """Respuestas del proveedor de IA externo que recibió el usuario desde esa fecha (para el límite diario)."""
+        ...
+    def preguntas_desde(self, usuario_id: int, desde: datetime) -> int: ...
 
 
 class RepoRetroalimentacion(Protocol):
@@ -397,6 +484,8 @@ class UnidadDeTrabajo(Protocol):
     retroalimentacion: RepoRetroalimentacion
     configuracion: RepoConfiguracion
     estadisticas: RepoEstadisticas
+    suscripciones_push: RepoSuscripcionesPush
+    conversaciones: RepoConversaciones
     auditoria: RegistroAuditoria
 
     def __enter__(self) -> Self: ...

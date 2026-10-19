@@ -44,7 +44,7 @@ uv sync
 uv run alembic upgrade head    # crea el esquema
 uv run centinela crear-admin --correo admin@tuempresa.co --nombre "Administración"
 uv run centinela api --recargar   # http://127.0.0.1:8000/api/docs
-uv run centinela worker           # revisa los buzones de Gmail conectados (ver docs/guia_conexion_gmail.md)
+uv run centinela worker           # revisa los buzones de Gmail conectados y entrega los avisos (ver docs/guia_conexion_gmail.md)
 
 # 3. Panel web (en otra terminal)
 cd frontend
@@ -55,6 +55,16 @@ npm run dev                    # http://localhost:5173 (reenvía /api al backend
 cd backend && uv run pytest
 cd frontend && npm test
 ```
+
+### Asistente de IA y notificaciones push (opcionales)
+
+- **Asistente**: con `CENTINELA_GEMINI_CLAVE` en `backend/.env` (clave de https://aistudio.google.com/apikey) responde con
+  Google Gemini; sin ella, o si Gemini falla o se agota el cupo diario (`asistente.max_preguntas_dia`, 30 por defecto),
+  responde en **modo básico** con reglas. Las conversaciones quedan guardadas por usuario.
+- **Notificaciones push** (estándar Web Push, sin Firebase): genera las llaves una sola vez con
+  `uv run centinela generar-vapid --contacto mailto:tu@correo.co` y copia las dos líneas que imprime en `backend/.env`.
+  Cada persona las activa en **Mi cuenta → Notificaciones**. Las entrega el `worker` (solo correos de riesgo alto).
+  En iPhone solo funcionan si Centinela se agrega a la pantalla de inicio. Si cambias las llaves, hay que reactivarlas.
 
 ### Producción
 
@@ -67,3 +77,9 @@ con `CENTINELA_ENTORNO=produccion` (cookies `Secure`, HSTS y sin `/api/docs`).
   que rota en cada uso (si alguien reutiliza uno viejo, se cierran todas las sesiones).
 - Panel y API en el mismo origen: sin CORS en producción. CSP estricta: el panel no carga nada de terceros.
 - El código QR del doble factor se genera en el navegador; el secreto nunca sale hacia otros servicios.
+- Asistente: al proveedor de IA solo salen datos mínimos y anonimizados del caso (dominios, sin direcciones de correo,
+  enlaces completos ni números largos; el cuerpo del correo nunca se guarda). Las respuestas se muestran como texto,
+  nunca como HTML.
+- Push: el aviso va cifrado de punta a punta (RFC 8291) y no incluye el asunto ni el remitente (los escribe el atacante).
+  El servidor solo envía a servicios push conocidos (Google, Mozilla, Apple, Microsoft): evita peticiones a
+  direcciones internas. Al cerrar sesión, el navegador deja de recibir avisos de la cuenta.

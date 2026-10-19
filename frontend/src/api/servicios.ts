@@ -8,14 +8,21 @@ import type {
   Buzon,
   Caso,
   Configuracion2FA,
+  ConfiguracionPush,
+  Conversacion,
+  ConversacionDetalle,
   Decision,
   DetalleCaso,
+  DispositivoPush,
+  EstadoAsistente,
   EstadoCaso,
   EstadoCuenta,
   MensajeRecibido,
   ModoCuarentena,
   Modelo,
   RespuestaInicio,
+  RespuestaAsistente,
+  ResultadoPrueba,
   ResumenPanel,
   ResumenRevision,
   TokenAcceso,
@@ -81,4 +88,22 @@ export const admin = {
     pedir<Usuario>(`/api/admin/usuarios/${id}/${accion}`, { metodo: "POST" }),
   buzones: () => pedir<Buzon[]>("/api/admin/buzones"),
   modelos: () => pedir<Modelo[]>("/api/admin/modelos"),
+};
+
+export const asistente = {
+  estado: () => pedir<EstadoAsistente>("/api/asistente/estado"),
+  preguntar: (pregunta: string, destino: { conversacion_id?: number; caso_id?: number }) =>
+    pedir<RespuestaAsistente>("/api/asistente/preguntas", { metodo: "POST", json: { pregunta, ...destino } }),
+  conversaciones: () => pedir<Conversacion[]>("/api/asistente/conversaciones"),
+  conversacion: (id: number) => pedir<ConversacionDetalle>(`/api/asistente/conversaciones/${id}`),
+  eliminar: (id: number) => pedir<void>(`/api/asistente/conversaciones/${id}`, { metodo: "DELETE" }),
+};
+
+export const push = {
+  configuracion: () => pedir<ConfiguracionPush>("/api/push/configuracion"),
+  dispositivos: () => pedir<DispositivoPush[]>("/api/push/dispositivos"),
+  activar: (suscripcion: PushSubscriptionJSON) => pedir<void>("/api/push/dispositivos", { metodo: "POST", json: suscripcion }),
+  quitarEste: (endpoint: string) => pedir<void>("/api/push/dispositivos/quitar", { metodo: "POST", json: { endpoint } }),
+  quitar: (id: number) => pedir<void>(`/api/push/dispositivos/${id}`, { metodo: "DELETE" }),
+  probar: () => pedir<ResultadoPrueba>("/api/push/prueba", { metodo: "POST" }),
 };

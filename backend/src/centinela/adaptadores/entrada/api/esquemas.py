@@ -1,13 +1,15 @@
 """Contratos JSON de la API (lo que ve React). Separados de las entidades del dominio a propósito."""
 from __future__ import annotations
 
+import hashlib
 from datetime import date, datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
 
+from centinela.aplicacion.casos_uso.asistente import RespuestaAsistente
 from centinela.aplicacion.casos_uso.buzones import ResumenRevision
-from centinela.aplicacion.puertos import EstadisticasPanel, ModeloRegistrado
+from centinela.aplicacion.puertos import Conversacion, EstadisticasPanel, ModeloRegistrado, SuscripcionPush
 from centinela.dominio.buzon import Buzon, ModoCuarentena
 from centinela.dominio.correo import ResumenMensaje
 from centinela.dominio.usuario import Usuario
@@ -268,3 +270,95 @@ class ModeloPublico(BaseModel):
         return cls(id=m.id, tipo=m.tipo, nombre=m.nombre, version=m.version, dataset=m.dataset, sha256=m.sha256,
                    umbral_medio=m.umbral_medio, umbral_alto=m.umbral_alto, activo=m.activo, metricas=m.metricas,
                    creado_en=m.creado_en)
+
+
+# ---------------------------------------------------------------------- notificaciones push
+class LlavesSuscripcion(BaseModel):
+    p256dh: str = Field(max_length=120)
+    auth: str = Field(max_length=40)
+
+
+class SolicitudSuscripcion(BaseModel):
+    """Lo que entrega `PushSubscription.toJSON()` en el navegador."""
+    endpoint: str = Field(max_length=1024)
+    keys: LlavesSuscripcion
+
+
+class SolicitudQuitarSuscripcion(BaseModel):
+    endpoint: str = Field(max_length=1024)
+
+
+class ConfiguracionPush(BaseModel):
+    disponible: bool
+    clave_publica: str | None
+
+
+class DispositivoPush(BaseModel):
+    id: int
+    dispositivo: str
+    creado_en: datetime | None
+    ultimo_envio_en: datetime | None
+    endpoint_hash: str           # para que el navegador reconozca su propia suscripción sin exponer la dirección
+
+    @classmethod
+    def desde(cls, s: SuscripcionPush) -> DispositivoPush:
+        return cls(id=s.id, dispositivo=s.dispositivo or "Navegador", creado_en=s.creado_en,
+                   ultimo_envio_en=s.ultimo_envio_en, endpoint_hash=hashlib.sha256(s.endpoint.encode()).hexdigest()[:16])
+
+
+class ResultadoPrueba(BaseModel):
+    entregados: int
+    vencidas: int
+    errores: int
+
+
+# ---------------------------------------------------------------------- asistente de IA
+class SolicitudPregunta(BaseModel):
+    pregunta: str = Field(min_length=1, max_length=1000)
+    conversacion_id: int | None = None
+    caso_id: int | None = None
+
+
+class TurnoPublico(BaseModel):
+    rol: str
+    contenido: str
+    proveedor: str | None
+    creado_en: datetime
+
+
+class RespuestaPublica(BaseModel):
+    conversacion_id: int
+    turno: TurnoPublico
+    aviso: str | None
+    restantes_ia: int
+
+    @classmethod
+    def desde(cls, r: RespuestaAsistente) -> RespuestaPublica:
+        return cls(conversacion_id=r.conversacion_id, aviso=r.aviso, restantes_ia=r.restantes_ia,
+                   turno=TurnoPublico(rol="asistente", contenido=r.contenido, proveedor=r.proveedor, creado_en=r.creado_en))
+
+
+class ConversacionPublica(BaseModel):
+    id: int
+    titulo: str
+    caso_id: int | None
+    creado_en: datetime
+    actualizado_en: datetime
+
+    @classmethod
+    def desde(cls, c: Conversacion) -> ConversacionPublica:
+        return cls(id=c.id, titulo=c.titulo or "Conversación", caso_id=c.caso_id, creado_en=c.creado_en,
+                   actualizado_en=c.actualizado_en)
+
+
+class ConversacionDetalle(ConversacionPublica):
+    turnos: list[TurnoPublico]
+
+
+class EstadoAsistentePublico(BaseModel):
+    ia_disponible: bool
+    proveedor: str
+    limite_ia: int
+    restantes_ia: int
+    sugerencias_generales: list[str]
+    sugerencias_caso: list[str]

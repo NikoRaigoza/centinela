@@ -30,6 +30,15 @@ class Configuracion(BaseSettings):
     gmail_redirect_uri: str = "http://localhost:8000/api/gmail/callback"
     url_panel: str = "http://localhost:5173"
 
+    # Asistente de IA (Google Gemini). Sin clave, el asistente responde en modo local con reglas.
+    # La clave se crea en https://aistudio.google.com/apikey
+    gemini_clave: SecretStr | None = None
+    gemini_modelo: str = "gemini-flash-latest"
+
+    # Notificaciones push (Web Push + VAPID). Las llaves se generan con: uv run centinela generar-vapid
+    vapid_clave_privada: SecretStr | None = None
+    vapid_contacto: str | None = None          # mailto:... o https://...: los servicios push lo usan si hay abuso
+
     # Carpeta de los modelos de ML registrados (ver adaptadores/salida/ml/registro.py)
     dir_modelos: Path = Path(__file__).resolve().parents[2] / "modelos"
 
@@ -47,6 +56,14 @@ class Configuracion(BaseSettings):
     @property
     def gmail_configurado(self) -> bool:
         return bool(self.gmail_client_id and self.gmail_client_secret)
+
+    @property
+    def push_configurado(self) -> bool:
+        return bool(self.vapid_clave_privada and self.vapid_clave_privada.get_secret_value() and self.vapid_contacto)
+
+    @property
+    def ia_configurada(self) -> bool:
+        return bool(self.gemini_clave and self.gemini_clave.get_secret_value())
 
 
 class ConfiguracionMigraciones(BaseSettings):

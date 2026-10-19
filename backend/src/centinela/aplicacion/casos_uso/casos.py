@@ -3,15 +3,20 @@ También el envío de avisos pendientes (patrón outbox), que ejecuta el worker.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from datetime import timedelta
 from enum import StrEnum
 
 from centinela.aplicacion.casos_uso.comun import SIN_CONTEXTO, CasoDeUso, Contexto, usuario_activo
+from centinela.aplicacion.casos_uso.notificaciones import enviar_a_usuario
 from centinela.aplicacion.puertos import (
     AccesoCorreoRevocado,
+    AvisoPendiente,
     Cifrador,
     ContextoCaso,
+    DatosAviso,
     DetalleCaso,
+    EnviadorPush,
     ErrorProveedorCorreo,
     EventoAuditoria,
     FabricaUnidadDeTrabajo,
@@ -42,7 +47,7 @@ _DESTINO = {Decision.CONFIRMAR: EstadoCaso.CONFIRMADO, Decision.FALSO_POSITIVO: 
 _ETIQUETA = {Decision.CONFIRMAR: "phishing", Decision.FALSO_POSITIVO: "legitimo"}
 
 
-def _contexto_propio(uow: UnidadDeTrabajo, usuario_id: int, caso_id: int) -> ContextoCaso:
+def contexto_propio(uow: UnidadDeTrabajo, usuario_id: int, caso_id: int) -> ContextoCaso:
     usuario_activo(uow, usuario_id)
     ctx = uow.casos.contexto(caso_id)
     if ctx is None or ctx.usuario_id != usuario_id:     # no se revela si el caso existe en otro buzón
@@ -67,7 +72,7 @@ class ListarCasos(CasoDeUso):
 class VerCaso(CasoDeUso):
     def ejecutar(self, usuario_id: int, caso_id: int) -> DetalleCaso:
         with self._uow() as uow:
-            _contexto_propio(uow, usuario_id, caso_id)
+            contexto_propio(uow, usuario_id, caso_id)
             return uow.casos.detalle(caso_id)
 
 
@@ -83,7 +88,7 @@ class LiberarCorreo(CasoDeUso):
         if self._proveedor is None:
             raise ServicioNoDisponible("La conexión con Gmail no está configurada en este servidor.")
         with self._uow() as uow:
-            cc = _contexto_propio(uow, usuario_id, caso_id)
+            cc = contexto_propio(uow, usuario_id, caso_id)
             caso = uow.casos.por_id(caso_id)
             buzon = uow.buzones.por_id(cc.buzon_id)
         if not caso.puede_liberarse:
@@ -111,7 +116,7 @@ class ClasificarCaso(CasoDeUso):
     def ejecutar(self, usuario_id: int, caso_id: int, decision: Decision, comentario: str | None = None,
                  ctx: Contexto = SIN_CONTEXTO) -> None:
         with self._uow() as uow:
-            cc = _contexto_propio(uow, usuario_id, caso_id)
+            cc = contexto_propio(uow, usuario_id, caso_id)
             caso = uow.casos.por_id(caso_id)
             caso.transicionar(_DESTINO[decision], self._reloj.ahora(), autor_id=usuario_id, detalle=comentario)
             uow.casos.guardar(caso)
@@ -124,7 +129,7 @@ class ClasificarCaso(CasoDeUso):
 class AgregarNotaCaso(CasoDeUso):
     def ejecutar(self, usuario_id: int, caso_id: int, texto: str) -> None:
         with self._uow() as uow:
-            _contexto_propio(uow, usuario_id, caso_id)
+            contexto_propio(uow, usuario_id, caso_id)
             caso = uow.casos.por_id(caso_id)
             caso.agregar_nota(texto, usuario_id, self._reloj.ahora())
             uow.casos.guardar(caso)
@@ -132,47 +137,67 @@ class AgregarNotaCaso(CasoDeUso):
 
 
 class EnviarAvisosPendientes(CasoDeUso):
-    """Inserta en el buzón del dueño el aviso de cada caso pendiente. Reintenta con espera creciente."""
+    """Entrega los avisos pendientes: por correo (se inserta en el buzón del dueño) y por push (a sus dispositivos).
+    Reintenta con espera creciente."""
 
     def __init__(self, uow: FabricaUnidadDeTrabajo, reloj: Reloj, proveedor: ProveedorCorreo | None,
-                 cifrador: Cifrador, redactor: RedactorAvisos):
+                 cifrador: Cifrador, redactor: RedactorAvisos, enviador_push: EnviadorPush | None = None,
+                 carga_push: Callable[[DatosAviso], dict] | None = None):
         super().__init__(uow, reloj)
         self._proveedor = proveedor
         self._cifrador = cifrador
         self._redactor = redactor
+        self._push = enviador_push
+        self._carga_push = carga_push
 
     def ejecutar(self, limite: int = 20) -> int:
-        if self._proveedor is None:
+        canales = [c for c, activo in (("correo", self._proveedor), ("push", self._push)) if activo is not None]
+        if not canales:
             return 0
-        ahora = self._reloj.ahora()
         with self._uow() as uow:
-            pendientes = uow.avisos.reclamar_pendientes(ahora, limite)
+            pendientes = uow.avisos.reclamar_pendientes(self._reloj.ahora(), limite, canales)
             uow.confirmar()
         enviados = 0
         for aviso in pendientes:
-            with self._uow() as uow:
-                buzon = uow.buzones.por_id(aviso.buzon_id)
-            if buzon is None or buzon.refresh_token_cifrado is None:
-                self._fallo(aviso.id, aviso.intentos, "El buzón está desconectado.", definitivo=True)
-                continue
-            try:
-                cliente = self._proveedor.abrir(self._cifrador.descifrar(buzon.refresh_token_cifrado))
-                referencia = cliente.insertar(self._redactor.redactar(aviso.datos), ["INBOX", "UNREAD", "IMPORTANT"])
-            except AccesoCorreoRevocado:
-                self._fallo(aviso.id, aviso.intentos, "Google retiró el permiso del buzón.", definitivo=True)
-                continue
-            except ErrorProveedorCorreo as e:
-                self._fallo(aviso.id, aviso.intentos, str(e))
+            entregado = self._por_push(aviso) if aviso.canal == "push" else self._por_correo(aviso)
+            if entregado is None:
                 continue
             with self._uow() as uow:
-                uow.avisos.marcar_enviado(aviso.id, self._reloj.ahora(), referencia)
+                uow.avisos.marcar_enviado(aviso.id, self._reloj.ahora(), entregado)
                 caso = uow.casos.por_id(aviso.caso_id)
+                medio = "con una notificación push" if aviso.canal == "push" else "por correo"
                 caso.eventos_nuevos.append(EventoCaso(TipoEvento.AVISO, self._reloj.ahora(),
-                                                      detalle="Se avisó al dueño del buzón por correo."))
+                                                      detalle=f"Se avisó al dueño del buzón {medio}."))
                 uow.casos.guardar(caso)
                 uow.confirmar()
             enviados += 1
         return enviados
+
+    def _por_correo(self, aviso: AvisoPendiente) -> str | None:
+        """Devuelve la referencia del aviso en Gmail, o None si no se pudo entregar."""
+        with self._uow() as uow:
+            buzon = uow.buzones.por_id(aviso.buzon_id)
+        if buzon is None or buzon.refresh_token_cifrado is None:
+            self._fallo(aviso.id, aviso.intentos, "El buzón está desconectado.", definitivo=True)
+            return None
+        try:
+            cliente = self._proveedor.abrir(self._cifrador.descifrar(buzon.refresh_token_cifrado))
+            return cliente.insertar(self._redactor.redactar(aviso.datos), ["INBOX", "UNREAD", "IMPORTANT"])
+        except AccesoCorreoRevocado:
+            self._fallo(aviso.id, aviso.intentos, "Google retiró el permiso del buzón.", definitivo=True)
+        except ErrorProveedorCorreo as e:
+            self._fallo(aviso.id, aviso.intentos, str(e))
+        return None
+
+    def _por_push(self, aviso: AvisoPendiente) -> str | None:
+        r = enviar_a_usuario(self._uow, self._reloj, self._push, aviso.usuario_id, self._carga_push(aviso.datos))
+        if r.entregados:
+            return f"{r.entregados} dispositivo(s)"
+        if r.errores:
+            self._fallo(aviso.id, aviso.intentos, "El servicio push del navegador no respondió.")
+        else:
+            self._fallo(aviso.id, aviso.intentos, "La persona ya no tiene dispositivos con avisos.", definitivo=True)
+        return None
 
     def _fallo(self, aviso_id: int, intentos: int, error: str, definitivo: bool = False) -> None:
         proximo = None

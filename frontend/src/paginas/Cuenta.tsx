@@ -1,4 +1,4 @@
-// Mi cuenta: datos, cambio de contraseña y doble factor.
+// Mi cuenta: datos, notificaciones push, cambio de contraseña y doble factor.
 
 import { useMutation } from "@tanstack/react-query";
 import { ShieldCheck } from "lucide-react";
@@ -6,6 +6,7 @@ import { useState, type FormEvent } from "react";
 import { mensajeDeError } from "../api/cliente";
 import { cuenta } from "../api/servicios";
 import { Configurar2FA } from "../componentes/Configurar2FA";
+import { Notificaciones } from "../componentes/Notificaciones";
 import { useTostadas } from "../componentes/Tostadas";
 import { Alerta } from "../componentes/ui";
 import { useSesion, useUsuario } from "../sesion/Sesion";
@@ -93,7 +94,7 @@ export function PaginaCuenta() {
   const usuario = useUsuario();
   return (
     <>
-      <div className="encabezado"><div><h1>Mi cuenta</h1><p>Tus datos y la seguridad de tu acceso al panel.</p></div></div>
+      <div className="encabezado"><div><h1>Mi cuenta</h1><p>Tus datos, tus avisos y la seguridad de tu acceso al panel.</p></div></div>
       <section className="tarjeta">
         <h2>Datos</h2>
         <dl className="datos">
@@ -104,6 +105,7 @@ export function PaginaCuenta() {
           <dt>Cuenta creada</dt><dd>{formatoFechaHora(usuario.creado_en)}</dd>
         </dl>
       </section>
+      <section className="tarjeta" id="notificaciones"><h2>Notificaciones</h2><Notificaciones /></section>
       <div className="rejilla rejilla-2">
         <section className="tarjeta"><h2>Doble factor (2FA)</h2><DobleFactor /></section>
         <section className="tarjeta"><h2>Cambiar contraseña</h2><CambiarClave /></section>

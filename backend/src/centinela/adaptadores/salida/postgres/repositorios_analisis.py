@@ -238,13 +238,15 @@ class RepoAvisosSql:
         self._s.execute(pg_insert(AvisoFila).values(caso_id=caso_id, canal=canal, destino=destino)
                         .on_conflict_do_nothing(constraint="aviso_unico_por_canal"))
 
-    def reclamar_pendientes(self, ahora: datetime, limite: int) -> list[AvisoPendiente]:
-        pendientes = (select(AvisoFila.id).where(AvisoFila.estado == "pendiente", AvisoFila.proximo_intento_en <= ahora)
+    def reclamar_pendientes(self, ahora: datetime, limite: int, canales: list[str]) -> list[AvisoPendiente]:
+        pendientes = (select(AvisoFila.id).where(AvisoFila.estado == "pendiente", AvisoFila.proximo_intento_en <= ahora,
+                                                 AvisoFila.canal.in_(canales))
                       .order_by(AvisoFila.proximo_intento_en).limit(limite).with_for_update(skip_locked=True))
         reclamados = self._s.execute(
             update(AvisoFila).where(AvisoFila.id.in_(pendientes.scalar_subquery()))
             .values(proximo_intento_en=ahora + ARRIENDO_AVISO, intentos=AvisoFila.intentos + 1)
-            .returning(AvisoFila.id, AvisoFila.caso_id, AvisoFila.destino, AvisoFila.intentos)).all()
+            .returning(AvisoFila.id, AvisoFila.caso_id, AvisoFila.canal, AvisoFila.destino,
+                       AvisoFila.intentos)).all()
         if not reclamados:
             return []
         casos = {c.id: (c, m, b, v) for c, m, b, v in self._s.execute(
@@ -266,7 +268,8 @@ class RepoAvisosSql:
                 datos=DatosAviso(destinatario=r.destino, nivel=veredicto.nivel, remitente=remitente,
                                  asunto=mensaje.asunto or "(sin asunto)", resumen=veredicto.resumen,
                                  razones=[x.texto for x in razones.get(veredicto.id, [])], accion=accion,
-                                 caso_id=r.caso_id)))
+                                 caso_id=r.caso_id, en_cuarentena=en_cuarentena),
+                canal=r.canal, usuario_id=buzon.usuario_id))
         return salida
 
     def marcar_enviado(self, aviso_id: int, ahora: datetime, referencia: str) -> None:
