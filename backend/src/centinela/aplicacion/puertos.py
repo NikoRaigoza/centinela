@@ -6,7 +6,7 @@ En las pruebas se reemplazan por versiones en memoria.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Protocol, Self
 
 from centinela.dominio.buzon import Buzon, EtiquetasCentinela
@@ -130,6 +130,8 @@ class EvaluacionEnlace:
     url: str
     dominio: str
     probabilidad: float | None        # None si el modelo no aplica (p. ej. enlace acortado)
+    dominio_visible: str | None = None   # el dominio que muestra el texto del enlace, si es distinto del real
+    enganoso: bool = False
 
 
 class ClasificadorContenido(Protocol):
@@ -160,6 +162,7 @@ class DatosAviso:
     resumen: str
     razones: list[str]
     accion: str               # lo que hizo Centinela (cuarentena, etiqueta, nada)
+    caso_id: int | None = None   # para enlazar directo al caso en el panel
 
 
 class RedactorAvisos(Protocol):
@@ -318,6 +321,28 @@ class RepoCasos(Protocol):
     def detalle(self, caso_id: int) -> DetalleCaso | None: ...
 
 
+
+# ---------------------------------------------------------------------- panel
+@dataclass(frozen=True)
+class DiaPanel:
+    fecha: date
+    revisados: int
+    sospechosos: int            # nivel medio
+    peligrosos: int             # nivel alto
+
+
+@dataclass(frozen=True)
+class EstadisticasPanel:
+    revisados: int
+    por_nivel: dict[str, int]
+    casos_por_estado: dict[str, int]                # estado actual de TODOS los casos (no solo del periodo)
+    entidades_suplantadas: list[tuple[str, int]]    # (entidad, correos de riesgo que la suplantaron)
+    serie: list[DiaPanel]                           # puede venir con huecos: el caso de uso los rellena
+
+
+class RepoEstadisticas(Protocol):
+    def panel(self, usuario_id: int, desde: datetime, zona: str) -> EstadisticasPanel: ...
+
 @dataclass(frozen=True)
 class AvisoPendiente:
     id: int
@@ -371,6 +396,7 @@ class UnidadDeTrabajo(Protocol):
     avisos: RepoAvisos
     retroalimentacion: RepoRetroalimentacion
     configuracion: RepoConfiguracion
+    estadisticas: RepoEstadisticas
     auditoria: RegistroAuditoria
 
     def __enter__(self) -> Self: ...

@@ -23,6 +23,10 @@ class RedactorAvisosMime:
         self._url_panel = url_panel
         self._dominio_ids = dominio_ids
 
+    def _enlace(self, d: DatosAviso) -> str:
+        base = self._url_panel.rstrip("/")
+        return f"{base}/casos/{d.caso_id}" if d.caso_id else base
+
     def redactar(self, d: DatosAviso) -> bytes:
         nivel = d.nivel.upper()
         asunto_corto = d.asunto if len(d.asunto) <= 60 else d.asunto[:57] + "…"
@@ -41,7 +45,7 @@ class RedactorAvisosMime:
         texto += [f"  {i}. {r}" for i, r in enumerate(d.razones, 1)]
         texto += ["", "Qué hicimos:", f"  {d.accion}", "", "Qué te recomendamos:"]
         texto += [f"  - {c}" for c in CONSEJOS]
-        texto += ["", f"Revisa el detalle en Centinela: {self._url_panel}"]
+        texto += ["", f"Revisa el detalle en Centinela: {self._enlace(d)}"]
         msg.set_content("\n".join(texto))
         msg.add_alternative(self._html(d, nivel), subtype="html")
         return msg.as_bytes()
@@ -65,7 +69,7 @@ RIESGO {e(nivel)}</span>
 <p style="margin:0"><b>Por qué creemos que es peligroso:</b></p><ol style="margin:6px 0 14px 18px;padding:0">{razones}</ol>
 <p style="margin:0"><b>Qué hicimos:</b> {e(d.accion)}</p>
 <p style="margin:14px 0 0"><b>Qué te recomendamos:</b></p><ul style="margin:6px 0 0 18px;padding:0">{consejos}</ul>
-<p style="margin:18px 0 0"><a href="{e(self._url_panel)}" style="color:#2E7CE4">Ver el detalle en Centinela</a></p>
+<p style="margin:18px 0 0"><a href="{e(self._enlace(d))}" style="color:#2E7CE4">Ver el detalle en Centinela</a></p>
 </td></tr><tr><td style="padding:14px 24px 20px;font-size:12px;color:#6B7B8C;border-top:1px solid #EEF1F5">
 Este aviso lo generó Centinela automáticamente. Centinela nunca te pedirá contraseñas por correo.
 </td></tr></table></td></tr></table></body></html>"""

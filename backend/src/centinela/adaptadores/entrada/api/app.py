@@ -1,16 +1,20 @@
-"""Aplicación FastAPI: arma rutas, traduce errores del dominio a HTTP y agrega cabeceras de seguridad."""
+"""Aplicación FastAPI: arma rutas, traduce errores del dominio a HTTP y agrega cabeceras de seguridad.
+Si el panel React está compilado, también lo sirve (rutas que no empiezan por /api)."""
 from __future__ import annotations
+
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy import text
 
 from centinela.adaptadores.entrada.api.rutas_acceso import auth, cuenta
 from centinela.adaptadores.entrada.api.rutas_admin import admin
 from centinela.adaptadores.entrada.api.rutas_buzones import admin_buzones, buzones, gmail
 from centinela.adaptadores.entrada.api.rutas_casos import analisis, casos
+from centinela.adaptadores.entrada.api.rutas_panel import panel
 from centinela.contenedor import Contenedor, construir
 from centinela.dominio import errores as e
 
@@ -32,6 +36,12 @@ CABECERAS_SEGURIDAD = {
     "Cache-Control": "no-store",
 }
 
+# El panel no carga nada de terceros: ni fuentes, ni scripts, ni analítica (los correos no salen de la empresa).
+CSP_PANEL = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+             "connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; "
+             "frame-ancestors 'none'")
+CACHE_INMUTABLE = "public, max-age=31536000, immutable"      # archivos de /assets: llevan hash en el nombre
+
 
 def crear_app(contenedor: Contenedor | None = None) -> FastAPI:
     contenedor = contenedor or construir()
@@ -47,6 +57,8 @@ def crear_app(contenedor: Contenedor | None = None) -> FastAPI:
     @app.middleware("http")
     async def cabeceras_seguridad(request: Request, call_next):
         respuesta = await call_next(request)
+        if request.url.path.startswith("/assets/") and respuesta.status_code == 200:
+            respuesta.headers["Cache-Control"] = CACHE_INMUTABLE
         for k, v in CABECERAS_SEGURIDAD.items():
             respuesta.headers.setdefault(k, v)
         if produccion:
@@ -79,4 +91,21 @@ def crear_app(contenedor: Contenedor | None = None) -> FastAPI:
     app.include_router(admin_buzones)
     app.include_router(casos)
     app.include_router(analisis)
+    app.include_router(panel)
+    if contenedor.config.dir_panel and (contenedor.config.dir_panel / "index.html").is_file():
+        _servir_panel(app, contenedor.config.dir_panel.resolve())
     return app
+
+
+def _servir_panel(app: FastAPI, carpeta: Path) -> None:
+    """Archivos del panel compilado; cualquier otra ruta devuelve index.html (React Router decide qué mostrar)."""
+    indice = carpeta / "index.html"
+
+    @app.get("/{ruta:path}", include_in_schema=False)
+    def panel_web(ruta: str):
+        if ruta == "api" or ruta.startswith("api/"):
+            return JSONResponse({"codigo": "no_encontrado", "mensaje": "La ruta no existe."}, status_code=404)
+        archivo = (carpeta / ruta).resolve()
+        if ruta and archivo.is_file() and archivo.is_relative_to(carpeta):      # sin salir de la carpeta
+            return FileResponse(archivo)
+        return FileResponse(indice, headers={"Content-Security-Policy": CSP_PANEL})

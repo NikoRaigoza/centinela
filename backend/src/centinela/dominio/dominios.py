@@ -59,3 +59,12 @@ def dominio_en_texto(texto: str) -> str | None:
     """Primer dominio escrito en un texto visible (p. ej. «www.bancolombia.com» en el texto de un enlace)."""
     m = _RE_DOMINIO.search(texto or "")
     return dominio_registrado(m.group(1)) if m else None
+
+
+def dominio_enganoso(url: str, texto_visible: str) -> str | None:
+    """Si el texto del enlace muestra un dominio distinto al real, devuelve el dominio que se muestra."""
+    host = host_de_url(url)
+    if not host or es_ip(host):
+        return None
+    real, visible = dominio_registrado(host), dominio_en_texto(texto_visible)
+    return visible if visible and real and visible != real else None

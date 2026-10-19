@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import time
+from dataclasses import replace
 from statistics import mean
 
 from centinela.aplicacion.casos_uso.comun import SIN_CONTEXTO, CasoDeUso, Contexto, usuario_activo
@@ -15,7 +16,7 @@ from centinela.aplicacion.puertos import (
     ResultadoAnalisis,
 )
 from centinela.dominio.correo import CorreoParseado
-from centinela.dominio.dominios import host_de_url
+from centinela.dominio.dominios import dominio_enganoso, host_de_url
 from centinela.dominio.entidades import CatalogoEntidades
 from centinela.dominio.idioma import detectar_idioma
 from centinela.dominio.reglas import evaluar_reglas
@@ -72,6 +73,8 @@ class MotorAnalisis:
         clasificador_enlaces = self._modelos.enlaces()
         urls = [e.url for e in correo.enlaces if host_de_url(e.url) and not e.url.lower().startswith("javascript:")]
         enlaces = clasificador_enlaces.evaluar(urls[:MAX_ENLACES_MODELO]) if clasificador_enlaces and urls else []
+        visibles_por_url = {e.url: dominio_enganoso(e.url, e.texto_visible) for e in reversed(correo.enlaces)}
+        enlaces = [replace(e, dominio_visible=v, enganoso=True) if (v := visibles_por_url.get(e.url)) else e for e in enlaces]
         probabilidades = [e.probabilidad for e in enlaces if e.probabilidad is not None]
         p_enlaces = mean(probabilidades) if probabilidades else None       # el promedio fue lo más estable
 

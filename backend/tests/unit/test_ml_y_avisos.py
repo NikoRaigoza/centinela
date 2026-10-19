@@ -64,8 +64,8 @@ def test_aviso_firmado_y_legible():
     crudo = RedactorAvisosMime(clave, "http://localhost:5173").redactar(DatosAviso(
         destinatario="ana@gmail.com", nivel="alto", remitente="Bancolombia <x@gmail.com>", asunto="Cuenta <bloqueada>",
         resumen="Este correo tiene señales claras de phishing.", razones=["Razón 1", "Razón 2"],
-        accion="Lo movimos a cuarentena."))
+        accion="Lo movimos a cuarentena.", caso_id=15))
     leido = LectorCorreoMime(clave).leer(crudo)
     assert leido.es_aviso_centinela and "Cuenta <bloqueada>" in leido.asunto
-    assert "Razón 2" in leido.cuerpo
+    assert "Razón 2" in leido.cuerpo and "http://localhost:5173/casos/15" in leido.cuerpo   # enlace directo al caso
     assert not LectorCorreoMime(b"otra-clave").leer(crudo).es_aviso_centinela

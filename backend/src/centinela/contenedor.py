@@ -14,7 +14,7 @@ from centinela.adaptadores.salida.lector_correo import LectorCorreoMime
 from centinela.adaptadores.salida.ml.registro import ProveedorModelosRegistrados
 from centinela.adaptadores.salida.postgres.uow import FabricaUnidadDeTrabajoSql, crear_motor
 from centinela.adaptadores.salida.seguridad import CifradorFernet, HasherArgon2, RelojSistema, ServicioTotpPyotp
-from centinela.aplicacion.casos_uso import acceso, analisis, buzones, casos
+from centinela.aplicacion.casos_uso import acceso, analisis, buzones, casos, panel
 from centinela.aplicacion.puertos import (
     AutorizacionCorreo,
     Cifrador,
@@ -68,6 +68,9 @@ class Contenedor:
     clasificar_caso: casos.ClasificarCaso
     nota_caso: casos.AgregarNotaCaso
     enviar_avisos: casos.EnviarAvisosPendientes
+    # panel
+    resumen_panel: panel.ObtenerResumenPanel
+    listar_modelos: panel.ListarModelos
 
 
 def clave_avisos(llave_cifrado: str) -> bytes:
@@ -129,4 +132,6 @@ def construir(config: Configuracion | None = None, autorizacion: AutorizacionCor
         nota_caso=casos.AgregarNotaCaso(uow, reloj),
         enviar_avisos=casos.EnviarAvisosPendientes(uow, reloj, proveedor, cifrador,
                                                    RedactorAvisosMime(clave_avisos(llave), config.url_panel)),
+        resumen_panel=panel.ObtenerResumenPanel(uow, reloj),
+        listar_modelos=panel.ListarModelos(uow, reloj),
     )

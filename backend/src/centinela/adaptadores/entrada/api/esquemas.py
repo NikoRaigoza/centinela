@@ -1,11 +1,13 @@
 """Contratos JSON de la API (lo que ve React). Separados de las entidades del dominio a propósito."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
 from centinela.aplicacion.casos_uso.buzones import ResumenRevision
+from centinela.aplicacion.puertos import EstadisticasPanel, ModeloRegistrado
 from centinela.dominio.buzon import Buzon, ModoCuarentena
 from centinela.dominio.correo import ResumenMensaje
 from centinela.dominio.usuario import Usuario
@@ -150,6 +152,7 @@ class RazonPublica(BaseModel):
 class EnlacePublico(BaseModel):
     dominio: str
     probabilidad: float | None
+    enganoso: bool = False          # el texto visible muestra otro dominio
 
 
 class ComponentesRiesgo(BaseModel):
@@ -214,3 +217,54 @@ class SolicitudClasificacion(BaseModel):
 
 class SolicitudNota(BaseModel):
     texto: str = Field(min_length=1, max_length=2000)
+
+
+# ---------------------------------------------------------------------- panel y modelos
+class DiaPublico(BaseModel):
+    fecha: date
+    revisados: int
+    sospechosos: int
+    peligrosos: int
+
+
+class EntidadFrecuente(BaseModel):
+    nombre: str
+    correos: int
+
+
+class ResumenPanelPublico(BaseModel):
+    dias: int
+    revisados: int
+    sospechosos: int
+    peligrosos: int
+    casos_por_estado: dict[str, int]
+    entidades_suplantadas: list[EntidadFrecuente]
+    serie: list[DiaPublico]
+
+    @classmethod
+    def desde(cls, e: EstadisticasPanel) -> ResumenPanelPublico:
+        return cls(dias=len(e.serie), revisados=e.revisados, sospechosos=e.por_nivel.get("medio", 0),
+                   peligrosos=e.por_nivel.get("alto", 0), casos_por_estado=e.casos_por_estado,
+                   entidades_suplantadas=[EntidadFrecuente(nombre=n, correos=c) for n, c in e.entidades_suplantadas],
+                   serie=[DiaPublico(fecha=d.fecha, revisados=d.revisados, sospechosos=d.sospechosos,
+                                     peligrosos=d.peligrosos) for d in e.serie])
+
+
+class ModeloPublico(BaseModel):
+    id: int
+    tipo: str
+    nombre: str
+    version: str
+    dataset: str
+    sha256: str
+    umbral_medio: float
+    umbral_alto: float
+    activo: bool
+    metricas: dict[str, Any]
+    creado_en: datetime | None
+
+    @classmethod
+    def desde(cls, m: ModeloRegistrado) -> ModeloPublico:
+        return cls(id=m.id, tipo=m.tipo, nombre=m.nombre, version=m.version, dataset=m.dataset, sha256=m.sha256,
+                   umbral_medio=m.umbral_medio, umbral_alto=m.umbral_alto, activo=m.activo, metricas=m.metricas,
+                   creado_en=m.creado_en)

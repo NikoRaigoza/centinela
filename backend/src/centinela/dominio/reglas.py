@@ -14,7 +14,7 @@ from centinela.dominio.dominios import (
     ACORTADORES,
     CORREO_GRATUITO,
     TLDS_ABUSO,
-    dominio_en_texto,
+    dominio_enganoso,
     dominio_registrado,
     es_ip,
     host_de_url,
@@ -132,8 +132,7 @@ def _enlaces(c: CorreoParseado, catalogo: CatalogoEntidades, r: ResultadoReglas)
             continue
         vistos.add(host)
         real = dominio_registrado(host)
-        visible = dominio_en_texto(e.texto_visible)
-        if visible and real and visible != real and not es_ip(host):
+        if dominio_enganoso(url, e.texto_visible):
             r.agregar(Area.ENLACE, Gravedad.ALTA, f"Un enlace dice «{e.texto_visible[:60]}» pero en realidad lleva a {real}.")
         if es_ip(host):
             r.agregar(Area.ENLACE, Gravedad.ALTA, "Un enlace lleva a una dirección IP en lugar de a un sitio con nombre.")

@@ -1,11 +1,12 @@
-"""Repositorios del análisis: modelos, catálogo de entidades, veredictos, casos, avisos y retroalimentación."""
+"""Repositorios del análisis: modelos, catálogo de entidades, veredictos, casos, avisos, retroalimentación y
+estadísticas del panel."""
 from __future__ import annotations
 
 import hashlib
 from datetime import datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -31,7 +32,9 @@ from centinela.aplicacion.puertos import (
     ContextoCaso,
     DatosAviso,
     DetalleCaso,
+    DiaPanel,
     EnlaceGuardado,
+    EstadisticasPanel,
     EventoGuardado,
     ModeloRegistrado,
     ResultadoAnalisis,
@@ -125,7 +128,8 @@ class RepoAnalisisSql:
         self._s.add_all(EnlaceAnalizadoFila(veredicto_id=fila.id, dominio=e.dominio[:255],
                                             url_sha256=hashlib.sha256(e.url.encode()).hexdigest(),
                                             probabilidad=_dec(e.probabilidad), nivel=_nivel_de(e.probabilidad),
-                                            es_acortador=e.dominio in ACORTADORES)
+                                            es_acortador=e.dominio in ACORTADORES, enganoso=e.enganoso,
+                                            dominio_texto_visible=e.dominio_visible)
                         for e in r.enlaces)
         self._s.flush()
         return fila.id
@@ -261,7 +265,8 @@ class RepoAvisosSql:
                 id=r.id, caso_id=r.caso_id, buzon_id=buzon.id, intentos=r.intentos,
                 datos=DatosAviso(destinatario=r.destino, nivel=veredicto.nivel, remitente=remitente,
                                  asunto=mensaje.asunto or "(sin asunto)", resumen=veredicto.resumen,
-                                 razones=[x.texto for x in razones.get(veredicto.id, [])], accion=accion)))
+                                 razones=[x.texto for x in razones.get(veredicto.id, [])], accion=accion,
+                                 caso_id=r.caso_id)))
         return salida
 
     def marcar_enviado(self, aviso_id: int, ahora: datetime, referencia: str) -> None:
@@ -287,3 +292,48 @@ class RepoRetroalimentacionSql:
         self._s.execute(q.on_conflict_do_update(constraint="retro_una_por_usuario", set_={
             "etiqueta": etiqueta, "comentario": comentario, "validada_por": None, "validada_en": None}))
 
+
+
+# ---------------------------------------------------------------------- estadísticas del panel
+class RepoEstadisticasSql:
+    def __init__(self, s: Session):
+        self._s = s
+
+    def panel(self, usuario_id: int, desde: datetime, zona: str) -> EstadisticasPanel:
+        buzones = select(BuzonFila.id).where(BuzonFila.usuario_id == usuario_id).scalar_subquery()
+        propios = MensajeAnalizadoFila.buzon_id.in_(buzones)
+        vigente = (VeredictoFila.mensaje_id == MensajeAnalizadoFila.id) & VeredictoFila.vigente.is_(True)
+        dia = func.date(func.timezone(zona, MensajeAnalizadoFila.recibido_en))
+
+        por_dia: dict = {}
+        por_nivel = {n.value: 0 for n in NivelRiesgo}
+        for fecha, nivel, n in self._s.execute(
+                select(dia, VeredictoFila.nivel, func.count()).select_from(MensajeAnalizadoFila)
+                .outerjoin(VeredictoFila, vigente).where(propios, MensajeAnalizadoFila.recibido_en >= desde)
+                .group_by(dia, VeredictoFila.nivel)):
+            conteo = por_dia.setdefault(fecha, {"revisados": 0, "medio": 0, "alto": 0})
+            conteo["revisados"] += n
+            if nivel:
+                por_nivel[nivel] += n
+                if nivel in conteo:
+                    conteo[nivel] += n
+
+        casos = dict(self._s.execute(
+            select(CasoFila.estado, func.count()).join(MensajeAnalizadoFila, MensajeAnalizadoFila.id == CasoFila.mensaje_id)
+            .where(propios).group_by(CasoFila.estado)).all())
+
+        n_correos = func.count(func.distinct(VeredictoFila.mensaje_id))
+        entidades = self._s.execute(
+            select(EntidadSuplantadaFila.nombre, n_correos).select_from(RazonFila)
+            .join(EntidadSuplantadaFila, EntidadSuplantadaFila.id == RazonFila.entidad_id)
+            .join(VeredictoFila, (VeredictoFila.id == RazonFila.veredicto_id) & VeredictoFila.vigente.is_(True))
+            .join(MensajeAnalizadoFila, MensajeAnalizadoFila.id == VeredictoFila.mensaje_id)
+            .where(propios, MensajeAnalizadoFila.recibido_en >= desde,
+                   VeredictoFila.nivel.in_([NivelRiesgo.MEDIO.value, NivelRiesgo.ALTO.value]))
+            .group_by(EntidadSuplantadaFila.nombre).order_by(n_correos.desc(), EntidadSuplantadaFila.nombre).limit(5)).all()
+
+        return EstadisticasPanel(
+            revisados=sum(c["revisados"] for c in por_dia.values()), por_nivel=por_nivel,
+            casos_por_estado={e.value: casos.get(e.value, 0) for e in EstadoCaso},
+            entidades_suplantadas=[(nombre, n) for nombre, n in entidades],
+            serie=[DiaPanel(f, c["revisados"], c["medio"], c["alto"]) for f, c in sorted(por_dia.items())])

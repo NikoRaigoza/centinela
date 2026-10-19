@@ -18,6 +18,11 @@ backend/            API y lógica (Python, FastAPI, arquitectura hexagonal)
       salida/       PostgreSQL, Gmail (OAuth2 + API), lector MIME, criptografía
   migraciones/      Alembic (la migración 0001 crea el esquema completo)
   tests/            Unitarias (sin BD) e integración (PostgreSQL real)
+frontend/           Panel web (React + TypeScript + Vite)
+  src/api/          Cliente HTTP (sesión segura) y una función por operación de la API
+  src/paginas/      Pantallas: inicio, correos de riesgo, buzones, análisis, cuenta, administración
+  src/componentes/  Piezas reutilizables (gráfico, diálogos, código QR del 2FA…)
+ml/                 Entrenamiento y evaluación de los modelos (ver ml/README.md)
 docs/               Diseño del modelo de datos y guía de conexión con Gmail
 legacy/             Prototipo original en Streamlit (solo referencia)
 docker-compose.yml  Base de datos PostgreSQL en contenedor
@@ -41,6 +46,24 @@ uv run centinela crear-admin --correo admin@tuempresa.co --nombre "Administraci�
 uv run centinela api --recargar   # http://127.0.0.1:8000/api/docs
 uv run centinela worker           # revisa los buzones de Gmail conectados (ver docs/guia_conexion_gmail.md)
 
-# 3. Pruebas
-uv run pytest
+# 3. Panel web (en otra terminal)
+cd frontend
+npm install
+npm run dev                    # http://localhost:5173 (reenvía /api al backend en el puerto 8000)
+
+# 4. Pruebas
+cd backend && uv run pytest
+cd frontend && npm test
 ```
+
+### Producción
+
+`cd frontend && npm run build` genera `frontend/dist/`. Si esa carpeta existe, la API también sirve el panel
+(`CENTINELA_DIR_PANEL` permite cambiar la ruta), así que basta un proceso: `uv run centinela api` detrás de HTTPS
+con `CENTINELA_ENTORNO=produccion` (cookies `Secure`, HSTS y sin `/api/docs`).
+
+### Seguridad del panel
+- El token de acceso (15 min) vive solo en memoria; el de renovación, en una cookie `httpOnly` y `SameSite=Strict`
+  que rota en cada uso (si alguien reutiliza uno viejo, se cierran todas las sesiones).
+- Panel y API en el mismo origen: sin CORS en producción. CSP estricta: el panel no carga nada de terceros.
+- El código QR del doble factor se genera en el navegador; el secreto nunca sale hacia otros servicios.

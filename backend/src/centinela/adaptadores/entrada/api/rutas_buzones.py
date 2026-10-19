@@ -53,7 +53,7 @@ def _pagina(exito: bool, mensaje: str, url_panel: str) -> str:
 min-height:100vh;margin:0;padding:16px}}main{{background:#fff;border-radius:12px;padding:32px;max-width:440px;
 box-shadow:0 2px 12px rgba(0,0,0,.08)}}h1{{color:{color};font-size:1.3rem}}a{{color:#2E7CE4}}</style></head>
 <body><main><h1>{html.escape(titulo)}</h1><p>{html.escape(mensaje)}</p>
-<p><a href="{html.escape(url_panel)}">Volver al panel de Centinela</a></p></main></body></html>"""
+<p><a href="{html.escape(url_panel.rstrip("/") + "/buzones")}">Volver al panel de Centinela</a></p></main></body></html>"""
 
 
 @gmail.get("/callback", response_class=HTMLResponse, include_in_schema=False)

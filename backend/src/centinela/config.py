@@ -33,6 +33,9 @@ class Configuracion(BaseSettings):
     # Carpeta de los modelos de ML registrados (ver adaptadores/salida/ml/registro.py)
     dir_modelos: Path = Path(__file__).resolve().parents[2] / "modelos"
 
+    # Panel React compilado (frontend/dist). Si existe, la API también lo sirve: un solo proceso en producción.
+    dir_panel: Path | None = Path(__file__).resolve().parents[3] / "frontend" / "dist"
+
     minutos_token_acceso: int = 15
     minutos_desafio_2fa: int = 5
     origenes_cors: list[str] = ["http://localhost:5173"]

@@ -55,7 +55,7 @@ async def analizar_correo(request: Request, yo: Actual, c: Cont, ctx: Ctx) -> An
         razones=[_razon(x) for x in v.razones_visibles], todas_las_razones=[_razon(x) for x in v.razones],
         senales_positivas=r.positivas,
         componentes=ComponentesRiesgo(contenido=v.p_contenido, enlaces=v.p_enlaces, tecnico=v.p_tecnico),
-        enlaces=[EnlacePublico(dominio=e.dominio, probabilidad=e.probabilidad) for e in r.enlaces],
+        enlaces=[EnlacePublico(dominio=e.dominio, probabilidad=e.probabilidad, enganoso=e.enganoso) for e in r.enlaces],
         tiempo_ms=v.tiempo_ms, modelo_contenido_id=r.modelo_contenido_id, modelo_enlaces_id=r.modelo_enlaces_id)
 
 
@@ -71,7 +71,7 @@ def ver(caso_id: int, yo: Actual, c: Cont) -> DetalleCasoPublico:
     return DetalleCasoPublico(
         **_caso(d.resumen), spf=d.spf, dkim=d.dkim, dmarc=d.dmarc,
         todas_las_razones=[_razon(x) for x in d.todas_las_razones],
-        enlaces=[EnlacePublico(dominio=e.dominio, probabilidad=e.probabilidad) for e in d.enlaces],
+        enlaces=[EnlacePublico(dominio=e.dominio, probabilidad=e.probabilidad, enganoso=e.enganoso) for e in d.enlaces],
         adjuntos=[a.nombre for a in d.adjuntos],
         historial=[EventoPublico(tipo=e.tipo, fecha=e.creado_en, autor=e.autor, detalle=e.detalle) for e in d.eventos])
 

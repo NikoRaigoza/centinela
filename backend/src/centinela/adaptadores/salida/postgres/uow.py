@@ -20,6 +20,7 @@ from centinela.adaptadores.salida.postgres.repositorios_analisis import (
     RepoAvisosSql,
     RepoCasosSql,
     RepoEntidadesSql,
+    RepoEstadisticasSql,
     RepoModelosSql,
     RepoRetroalimentacionSql,
 )
@@ -47,6 +48,7 @@ class UnidadDeTrabajoSql:
         self.avisos = RepoAvisosSql(self._s)
         self.retroalimentacion = RepoRetroalimentacionSql(self._s)
         self.configuracion = RepoConfiguracionSql(self._s)
+        self.estadisticas = RepoEstadisticasSql(self._s)
         self.auditoria = RegistroAuditoriaSql(self._s)
         return self
 

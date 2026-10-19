@@ -1,10 +1,10 @@
-"""Rutas de administración de cuentas (solo rol administrador)."""
+"""Rutas de administración: cuentas de usuario y modelos de ML en uso (solo rol administrador)."""
 from __future__ import annotations
 
 from fastapi import APIRouter
 
 from centinela.adaptadores.entrada.api.dependencias import Admin, Cont, Ctx
-from centinela.adaptadores.entrada.api.esquemas import UsuarioPublico
+from centinela.adaptadores.entrada.api.esquemas import ModeloPublico, UsuarioPublico
 from centinela.aplicacion.casos_uso.acceso import AccionCuenta
 from centinela.dominio.usuario import EstadoCuenta
 
@@ -19,3 +19,9 @@ def listar_usuarios(yo: Admin, c: Cont, estado: EstadoCuenta | None = None) -> l
 @admin.post("/usuarios/{usuario_id}/{accion}", response_model=UsuarioPublico)
 def cambiar_estado(usuario_id: int, accion: AccionCuenta, yo: Admin, c: Cont, ctx: Ctx) -> UsuarioPublico:
     return UsuarioPublico.desde(c.cambiar_estado_cuenta.ejecutar(yo.usuario_id, usuario_id, accion, ctx))
+
+
+@admin.get("/modelos", response_model=list[ModeloPublico])
+def listar_modelos(yo: Admin, c: Cont) -> list[ModeloPublico]:
+    """Modelos registrados, con su huella SHA-256, umbrales y métricas de validación (solo lectura)."""
+    return [ModeloPublico.desde(m) for m in c.listar_modelos.ejecutar(yo.usuario_id)]

@@ -95,6 +95,7 @@ def test_phishing_a_cuarentena_aviso_y_liberacion(entorno):
     detalle = ana.get(f"/api/casos/{caso['id']}").json()
     assert [e["tipo"] for e in detalle["historial"]] == ["creado", "cuarentena", "aviso"]
     assert detalle["enlaces"][0]["dominio"] == "bancolombia-verificacion.top"
+    assert detalle["enlaces"][0]["enganoso"] is True                    # el texto decía www.bancolombia.com
 
     # Otra persona no puede ver ni liberar el caso
     luis = cliente_de(c, "luis@gmail.com")
@@ -142,3 +143,49 @@ def test_analisis_manual_de_un_eml(entorno):
     with c.motor.connect() as conn:                            # no se guarda el correo, solo la auditoría
         assert conn.scalar(text("SELECT count(*) FROM centinela.mensaje_analizado")) == 0
         assert conn.scalar(text("SELECT count(*) FROM centinela.auditoria WHERE accion = 'analisis.manual'")) == 2
+
+
+def test_resumen_del_panel_y_modelos_en_uso(entorno):
+    c, auth, gmail = entorno
+    ana = cliente_de(c, "ana@gmail.com")
+    auth.autoriza("cod", gmail)
+    estado = parse_qs(urlparse(ana.post("/api/buzones/conexion").json()["url"]).query)["state"][0]
+    ana.get("/api/gmail/callback", params={"state": estado, "code": "cod"})
+    buzon_id = ana.get("/api/buzones").json()[0]["id"]
+    gmail.llega(PHISHING)
+    gmail.llega(LEGITIMO)
+    ana.post(f"/api/buzones/{buzon_id}/revision")
+
+    r = ana.get("/api/panel/resumen", params={"dias": 7}).json()
+    assert r["dias"] == 7 and len(r["serie"]) == 7                       # días sin correos también aparecen
+    assert (r["revisados"], r["peligrosos"]) == (2, 1)
+    assert r["serie"][-1]["revisados"] == 2 and r["serie"][-1]["peligrosos"] == 1
+    assert r["casos_por_estado"]["en_cuarentena"] == 1 and r["casos_por_estado"]["liberado"] == 0
+    assert r["entidades_suplantadas"] == [{"nombre": "Bancolombia", "correos": 1}]
+    assert cliente_de(c, "luis@gmail.com").get("/api/panel/resumen").json()["revisados"] == 0   # solo lo propio
+    assert ana.get("/api/panel/resumen", params={"dias": 365}).status_code == 422
+
+    assert ana.get("/api/admin/modelos").status_code == 403
+    with c.uow() as uow:                                  # el admin entra con 2FA: aquí se emite su token directamente
+        token_admin = c.tokens.acceso(uow.usuarios.por_correo("admin@centinela.co"))
+    modelos = TestClient(crear_app(c)).get("/api/admin/modelos", headers={"Authorization": f"Bearer {token_admin}"}).json()
+    assert {(m["tipo"], m["activo"]) for m in modelos} == {("enlaces", True), ("contenido", True)}
+
+
+def test_la_api_sirve_el_panel_compilado(entorno, tmp_path):
+    c, _, _ = entorno
+    (tmp_path / "assets").mkdir()
+    (tmp_path / "index.html").write_text("<!doctype html><div id=raiz></div>")
+    (tmp_path / "assets" / "app-123.js").write_text("console.log(1)")
+    (tmp_path.parent / "secreto.txt").write_text("no")
+    c.config.dir_panel = tmp_path
+    cli = TestClient(crear_app(c))
+    indice = cli.get("/casos/15")                                         # ruta de React Router
+    assert indice.status_code == 200 and "raiz" in indice.text
+    assert "frame-ancestors 'none'" in indice.headers["content-security-policy"]
+    js = cli.get("/assets/app-123.js")
+    assert js.status_code == 200 and "immutable" in js.headers["cache-control"]
+    for intento in ("/..%2Fsecreto.txt", "/assets/..%2F..%2Fsecreto.txt"):   # no se sale de la carpeta
+        assert "raiz" in cli.get(intento).text
+    assert cli.get("/api/no-existe").status_code == 404
+    assert cli.get("/api/salud").json()["estado"] == "ok"
