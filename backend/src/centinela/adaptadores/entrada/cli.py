@@ -53,13 +53,33 @@ def _worker(args: argparse.Namespace) -> int:
         print("Falta configurar Gmail (CENTINELA_GMAIL_CLIENT_ID y CENTINELA_GMAIL_CLIENT_SECRET).", file=sys.stderr)
         return 1
     parar = threading.Event()
-    for senal in (signal.SIGINT, signal.SIGTERM):
-        signal.signal(senal, lambda *_: parar.set())
+    despertar = threading.Event()                # lo activa una señal de parada o un aviso de Gmail en tiempo real
 
-    log.info("Worker iniciado: revisa cada buzón cada %s s", c.revisar_pendientes.intervalo_segundos())
+    def detener(*_):
+        parar.set()
+        despertar.set()
+
+    for senal in (signal.SIGINT, signal.SIGTERM):
+        signal.signal(senal, detener)
+
+    tiempo_real = c.renovar_vigilancias.activo
+    if tiempo_real:
+        from centinela.adaptadores.salida.postgres.despertador import Despertador
+
+        Despertador(c.config.bd_url, despertar, parar).iniciar()
+        log.info("Worker iniciado con avisos de Gmail en tiempo real (revisión de respaldo cada %s s)",
+                 c.revisar_pendientes.intervalo_respaldo_segundos())
+    else:
+        log.info("Worker iniciado: revisa cada buzón cada %s s", c.revisar_pendientes.intervalo_segundos())
+    proxima_renovacion = 0.0
     while not parar.is_set():
         inicio = time.monotonic()
+        despertar.clear()
         try:
+            if tiempo_real and inicio >= proxima_renovacion:
+                if renovados := c.renovar_vigilancias.ejecutar():
+                    log.info("Avisos en tiempo real activados o renovados en %s buzón(es)", renovados)
+                proxima_renovacion = inicio + 60
             for r in c.revisar_pendientes.ejecutar():
                 # Solo cifras: los registros nunca incluyen remitentes ni asuntos (privacidad).
                 if r.nuevos or r.error:
@@ -70,7 +90,7 @@ def _worker(args: argparse.Namespace) -> int:
             log.exception("Falló un ciclo de revisión; se reintenta en el siguiente")
         if args.una_vez:
             break
-        parar.wait(max(1.0, args.pausa - (time.monotonic() - inicio)))
+        despertar.wait(max(1.0, args.pausa - (time.monotonic() - inicio)))
     log.info("Worker detenido")
     return 0
 

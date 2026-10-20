@@ -17,6 +17,7 @@ from centinela.adaptadores.entrada.api.rutas_asistente import asistente, push
 from centinela.adaptadores.entrada.api.rutas_buzones import admin_buzones, buzones, gmail
 from centinela.adaptadores.entrada.api.rutas_casos import analisis, casos
 from centinela.adaptadores.entrada.api.rutas_panel import panel
+from centinela.adaptadores.entrada.api.rutas_reportes import reportes
 from centinela.contenedor import Contenedor, construir
 from centinela.dominio import errores as e
 
@@ -97,6 +98,7 @@ def crear_app(contenedor: Contenedor | None = None) -> FastAPI:
     app.include_router(casos)
     app.include_router(analisis)
     app.include_router(panel)
+    app.include_router(reportes)
     app.include_router(asistente)
     app.include_router(push)
     if contenedor.config.dir_panel and (contenedor.config.dir_panel / "index.html").is_file():

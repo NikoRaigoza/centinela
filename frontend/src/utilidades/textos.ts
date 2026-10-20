@@ -7,6 +7,7 @@ import type {
   EstadoCuenta,
   ModoCuarentena,
   Nivel,
+  OrigenEnlace,
   ResultadoAuth,
   TipoEvento,
 } from "../api/tipos";
@@ -79,7 +80,21 @@ export const AREA: Record<Area, string> = {
   contenido: "Contenido",
   enlace: "Enlaces",
   adjunto: "Adjuntos",
+  fraude: "Fraude sin enlaces",
 };
+
+export const ORIGEN_ENLACE: Record<OrigenEnlace, string> = {
+  cuerpo: "En el texto",
+  qr: "Código QR",
+  adjunto: "Dentro de un adjunto",
+};
+
+export function formatoTamano(bytes: number | null | undefined): string {
+  if (bytes == null) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1).replace(".", ",")} MB`;
+}
 
 export const EVENTO: Record<TipoEvento, string> = {
   creado: "Centinela detectó el correo",

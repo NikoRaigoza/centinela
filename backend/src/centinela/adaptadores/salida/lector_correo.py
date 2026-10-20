@@ -5,12 +5,15 @@ Seguridad:
     cualquier remitente puede escribir uno falso con "spf=pass" en su propio correo.
   * Los avisos de Centinela se reconocen por una firma HMAC en X-Centinela-Alerta, no por la mera
     presencia del encabezado (si no, un atacante lo copiaría para evitar el análisis).
+  * Los adjuntos y las imágenes se inspeccionan en memoria (tipo real, macros, comprimidos, códigos QR) y se
+    descartan: del correo solo quedan los datos del análisis, nunca el archivo.
 """
 from __future__ import annotations
 
 import hashlib
 import hmac
 import re
+from dataclasses import replace
 from datetime import UTC
 from email import policy
 from email.message import EmailMessage
@@ -18,7 +21,8 @@ from email.parser import BytesParser
 from email.utils import parseaddr, parsedate_to_datetime
 from html.parser import HTMLParser
 
-from centinela.dominio.correo import Adjunto, Autenticacion, CorreoParseado, Enlace, ResultadoAuth
+from centinela.adaptadores.salida.inspector_adjuntos import MAX_IMAGENES_QR, InspectorAdjuntos
+from centinela.dominio.correo import Adjunto, Autenticacion, CorreoParseado, Enlace, OrigenEnlace, ResultadoAuth
 
 SERVIDOR_CONFIABLE = "mx.google.com"
 ENCABEZADO_AVISO = "X-Centinela-Alerta"
@@ -94,8 +98,9 @@ def _autenticacion(msg: EmailMessage) -> Autenticacion:
 
 
 class LectorCorreoMime:
-    def __init__(self, clave_avisos: bytes):
+    def __init__(self, clave_avisos: bytes, inspector: InspectorAdjuntos | None = None):
         self._clave_avisos = clave_avisos
+        self._inspector = inspector
 
     def leer(self, crudo: bytes) -> CorreoParseado:
         msg = BytesParser(policy=policy.default).parsebytes(crudo)
@@ -103,17 +108,33 @@ class LectorCorreoMime:
         _, responder_a = parseaddr(str(msg.get("Reply-To") or ""))
         _, retorno = parseaddr(str(msg.get("Return-Path") or ""))
         texto_plano, partes_html, adjuntos = [], [], []
+        de_qr: list[Enlace] = []
+        de_adjuntos: list[Enlace] = []
+        imagenes = 0
 
         for parte in msg.walk():
             if parte.is_multipart():
                 continue
             tipo, disposicion, archivo = parte.get_content_type(), parte.get_content_disposition(), parte.get_filename()
             if tipo.startswith("image/") and disposicion != "attachment":
-                continue                                   # imágenes del cuerpo (logos, firmas)
+                # Imágenes del cuerpo (logos, firmas): no son adjuntos, pero pueden traer un código QR (quishing).
+                if self._inspector is not None and imagenes < MAX_IMAGENES_QR:
+                    imagenes += 1
+                    for url in self._inspector.qr_de_imagen(parte.get_payload(decode=True) or b""):
+                        de_qr.append(Enlace(url=url, origen=OrigenEnlace.QR, fuente=archivo[:120] if archivo else None))
+                continue
             if disposicion == "attachment" or archivo or tipo not in ("text/plain", "text/html"):
                 datos = parte.get_payload(decode=True) or b""
-                adjuntos.append(Adjunto(nombre=(archivo or "(sin nombre)")[:255], tipo_mime=tipo[:100],
-                                        tamano_bytes=len(datos), sha256=hashlib.sha256(datos).hexdigest()))
+                nombre_adjunto = (archivo or "(sin nombre)")[:255]
+                adjunto = Adjunto(nombre=nombre_adjunto, tipo_mime=tipo[:100], tamano_bytes=len(datos),
+                                  sha256=hashlib.sha256(datos).hexdigest())
+                if self._inspector is not None:
+                    insp = self._inspector.inspeccionar(nombre_adjunto, tipo, datos)
+                    adjunto = replace(adjunto, tipo_real=insp.tipo_real, senales=insp.senales, contenido=insp.contenido)
+                    fuente = nombre_adjunto[:120]
+                    de_qr += [Enlace(url=u, origen=OrigenEnlace.QR, fuente=fuente) for u in insp.qr]
+                    de_adjuntos += [Enlace(url=u, origen=OrigenEnlace.ADJUNTO, fuente=fuente) for u in insp.enlaces]
+                adjuntos.append(adjunto)
                 continue
             (texto_plano if tipo == "text/plain" else partes_html).append(_contenido(parte))
 
@@ -133,10 +154,11 @@ class LectorCorreoMime:
 
         enlaces, vistos = [], set()
         candidatos = list(enlaces_html) + [(m.group(1).rstrip(".,;:!?)"), "") for m in _RE_URL_TEXTO.finditer(cuerpo)]
-        for url, texto in candidatos:
-            if url and url not in vistos and not url.lower().startswith(("mailto:", "tel:", "#")):
-                vistos.add(url)
-                enlaces.append(Enlace(url=url, texto_visible=texto[:300]))
+        # Primero los de códigos QR: son pocos y los más reveladores (así entran al modelo de enlaces sí o sí)
+        for e in de_qr + [Enlace(url=u, texto_visible=t[:300]) for u, t in candidatos] + de_adjuntos:
+            if e.url and e.url not in vistos and not e.url.lower().startswith(("mailto:", "tel:", "#")):
+                vistos.add(e.url)
+                enlaces.append(e)
 
         message_id = str(msg.get("Message-ID") or "").strip() or None
         return CorreoParseado(

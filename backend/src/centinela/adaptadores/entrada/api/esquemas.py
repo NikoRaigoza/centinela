@@ -98,12 +98,14 @@ class BuzonPublico(BaseModel):
     ultima_revision_en: datetime | None
     ultimo_error: str | None
     conectado_en: datetime
+    tiempo_real: bool = False         # Gmail avisa al instante de los correos nuevos (Pub/Sub)
 
     @classmethod
-    def desde(cls, b: Buzon) -> BuzonPublico:
+    def desde(cls, b: Buzon, ahora: datetime | None = None) -> BuzonPublico:
         return cls(id=b.id, usuario_id=b.usuario_id, correo_gmail=b.correo_gmail, estado=b.estado.value,
                    modo=b.modo.value, avisar_por_correo=b.avisar_por_correo, ultima_revision_en=b.ultima_revision_en,
-                   ultimo_error=b.ultimo_error, conectado_en=b.conectado_en)
+                   ultimo_error=b.ultimo_error, conectado_en=b.conectado_en,
+                   tiempo_real=ahora is not None and b.en_tiempo_real(ahora))
 
 
 class CambiosBuzon(BaseModel):
@@ -155,6 +157,15 @@ class EnlacePublico(BaseModel):
     dominio: str
     probabilidad: float | None
     enganoso: bool = False          # el texto visible muestra otro dominio
+    origen: str = "cuerpo"          # cuerpo | qr (leído de un código QR) | adjunto (dentro de un PDF o página adjunta)
+
+
+class AdjuntoPublico(BaseModel):
+    nombre: str
+    tipo_mime: str | None = None
+    tamano_bytes: int | None = None
+    peligroso: bool = False
+    motivo: str | None = None
 
 
 class ComponentesRiesgo(BaseModel):
@@ -175,6 +186,7 @@ class AnalisisPublico(BaseModel):
     senales_positivas: list[str]
     componentes: ComponentesRiesgo
     enlaces: list[EnlacePublico]
+    adjuntos: list[AdjuntoPublico] = []
     tiempo_ms: int | None
     modelo_contenido_id: int | None
     modelo_enlaces_id: int | None
@@ -208,7 +220,7 @@ class DetalleCasoPublico(CasoPublico):
     dmarc: str | None
     todas_las_razones: list[RazonPublica]
     enlaces: list[EnlacePublico]
-    adjuntos: list[str]
+    adjuntos: list[AdjuntoPublico]
     historial: list[EventoPublico]
 
 

@@ -48,9 +48,11 @@ TEMAS: list[tuple[tuple[str, ...], str]] = [
      "push** en el navegador o "
      "celular: en **Mi cuenta**, sección «Notificaciones», pulsa **Activar en este dispositivo** y acepta el permiso.\n"
      "Si no te llegan, revisa que el navegador tenga permiso de notificaciones y usa **Enviar una prueba**."),
-    (("revis", "cada cuanto", "tarda", "demora", "no detecto", "no aparece"),
-     "Centinela revisa los buzones conectados cada pocos segundos (unos 30). Si quieres revisar ya, entra a **Mis "
-     "buzones** y pulsa **Revisar ahora**. Si un buzón aparece como «Desconectado» o «Con problemas», vuelve a conectarlo."),
+    (("revis", "cada cuanto", "tarda", "demora", "no detecto", "no aparece", "tiempo real", "al instante"),
+     "Si el servidor tiene activos los **avisos en tiempo real**, Gmail le avisa a Centinela apenas llega un correo y se "
+     "revisa en segundos (en **Mis buzones** verás «Tiempo real»). Si no, Centinela revisa cada buzón cada 30 segundos "
+     "aproximadamente. Para revisar ya, pulsa **Revisar ahora** en Mis buzones. Si un buzón aparece como "
+     "«Desconectado» o «Con problemas», vuelve a conectarlo."),
     (("analizar", "eml", "descargar mensaje", "revisar un correo", "subir un correo", "otro correo"),
      "Para revisar un correo a mano:\n1. En Gmail abre el correo, pulsa los tres puntos (⋮) y **Descargar mensaje** "
      "(se baja un archivo .eml).\n2. En Centinela entra a **Analizar un correo** y súbelo.\nVerás el nivel de riesgo y "
@@ -72,6 +74,28 @@ TEMAS: list[tuple[tuple[str, ...], str]] = [
      "Centinela revisa los enlaces sin abrirlos y te muestra solo su **dominio** (por ejemplo, bancolombia.com). "
      "Un enlace es **engañoso** cuando el texto muestra una dirección pero en realidad lleva a otra. Nunca abras un "
      "enlace de un correo sospechoso: escribe tú mismo la dirección oficial en el navegador."),
+    (("qr", "codigo qr", "escanear", "escanea", "quishing"),
+     "Un **código QR** en un correo es una forma de esconder un enlace: lo escaneas con el celular y no ves bien a dónde "
+     "lleva. Centinela lee los QR de las imágenes y de los PDF adjuntos y revisa su destino como cualquier otro enlace. "
+     "Si un correo te pide escanear un QR para «verificar», «reactivar» o «actualizar» datos, **no lo escanees**: entra "
+     "tú mismo a la página oficial. Un QR de la DIAN en una factura electrónica es normal."),
+    (("adjunto", "archivo", "zip", "macro", "pdf", "documento"),
+     "Centinela revisa los adjuntos **por dentro**, sin abrirlos: detecta programas disfrazados de PDF o de foto, "
+     "comprimidos (.zip) que traen programas, documentos de Office con macros, PDF con código, páginas web que piden "
+     "tu contraseña y archivos con clave que los antivirus no pueden revisar. Si un adjunto aparece como **peligroso** "
+     "en el caso, no lo descargues ni lo abras."),
+    (("transferencia", "tarjetas de regalo", "tarjeta de regalo", "jefe", "gerente", "cambio de cuenta", "cuenta bancaria",
+      "extorsion", "bitcoin", "sin enlace", "consignar", "pago urgente"),
+     "Hay fraudes **sin enlaces ni adjuntos**: alguien se hace pasar por tu jefe, un proveedor o un familiar y te pide "
+     "una transferencia, cambiar la cuenta donde pagas facturas o comprar tarjetas de regalo; o te amenaza para que "
+     "pagues en bitcoin. Centinela los reconoce por lo que piden y por el remitente (cuenta gratuita, dominio parecido "
+     "al de tu empresa, primera vez que te escribe).\nAntes de pagar, **confirma llamando** a un número que ya tengas, "
+     "nunca al del correo. Ningún jefe pide pagos en tarjetas de regalo."),
+    (("reporte", "informe", "pdf", "excel", "descargar", "estadistica", "exportar"),
+     "En el menú **Reportes** puedes descargar un resumen de tus buzones en **PDF** (para leer o imprimir) o en "
+     "**Excel** (para analizar las cifras): correos revisados, sospechosos y peligrosos por día, qué tipo de amenazas "
+     "llegaron, entidades suplantadas y el detalle de cada correo de riesgo. Eliges el periodo (7, 30, 90 o 365 días). "
+     "Los administradores pueden sacar también el de toda la organización, solo con cifras."),
     (("dos pasos", "2fa", "autenticador", "codigo de recuperacion", "doble factor", "verificacion"),
      "La **verificación en dos pasos** pide, además de tu contraseña, un código que cambia cada 30 segundos en una app "
      "autenticadora (Google Authenticator, Microsoft Authenticator…). Actívala en **Mi cuenta**. Guarda tus **códigos "
@@ -89,7 +113,8 @@ TEMAS: list[tuple[tuple[str, ...], str]] = [
      "le envían datos mínimos, sin direcciones de correo ni números largos. Puedes desconectar tu Gmail cuando quieras."),
     (("administr", "aprobar usuarios", "modelos", "soy admin"),
      "Si eres administrador, en el menú **Administración** puedes aprobar o rechazar usuarios, ver los buzones "
-     "conectados y revisar qué modelos de machine learning están en uso, con sus métricas."),
+     "conectados, revisar qué modelos de machine learning están en uso y descargar el reporte de toda la "
+     "organización en **Reportes**."),
     (("reconoc", "correo falso", "estafa", "fraude", "como se si", "senales", "phishing"),
      "Señales de un correo falso:\n1. **Afán o miedo**: «tu cuenta será bloqueada», «embargo», «multa», «24 horas».\n"
      "2. **Remitente raro**: dice «Bancolombia» o «DIAN» pero la dirección es de otro dominio.\n3. **Te pide datos**: "
@@ -97,8 +122,8 @@ TEMAS: list[tuple[tuple[str, ...], str]] = [
      "guías de envío).\nAnte la duda, no abras nada y llama a la línea oficial de la entidad."),
 ]
 
-SUGERENCIAS_GENERALES = ["¿Cómo reconozco un correo falso?", "¿Cómo activo las notificaciones?",
-                         "¿Dónde quedan los correos en cuarentena?", "¿Qué datos guarda Centinela?"]
+SUGERENCIAS_GENERALES = ["¿Cómo reconozco un correo falso?", "¿Es peligroso escanear un código QR de un correo?",
+                         "Mi jefe me pidió una transferencia por correo", "¿Cómo descargo un reporte?"]
 SUGERENCIAS_CASO = ["¿Por qué es sospechoso?", "¿Qué hago ahora?", "¿Cómo sé si es un falso positivo?",
                     "Ya abrí el enlace o entregué datos"]
 
@@ -181,15 +206,15 @@ def responder_local(pregunta: str, caso: dict[str, Any] | None) -> str:
             dominios = "\n".join(f"- {e['dominio']}" + (" (engañoso)" if e.get("enganoso") else "")
                                  for e in caso["enlaces"])
             return "Estos son los dominios de los enlaces del correo:\n" + dominios + "\n\nNo los abras para comprobarlo."
-    elif _tiene(q, ("que hago", "que debo", "pasos", "recomiend")):
-        return QUE_HACER
     mejor, puntos = None, 0
     for palabras, respuesta in TEMAS:
         p = sum(len(w) for w in palabras if w in q)
         if p > puntos:
             mejor, puntos = respuesta, p
-    if mejor:
+    if mejor:                         # «mi jefe me pide tarjetas de regalo, ¿qué hago?» → el tema, no la receta general
         return mejor
+    if caso is None and _tiene(q, ("que hago", "que debo", "pasos", "recomiend")):
+        return QUE_HACER
     if _tiene(q, ("gracias",)):
         return "¡Con gusto! Si tienes otra duda, aquí estoy."
     if _tiene(q, ("hola", "buenas", "buenos dias", "buen dia")):

@@ -46,7 +46,7 @@ ESTADO_BUZON = _enum("estado_buzon", "activo", "pausado", "revocado", "error")
 MODO_CUARENTENA = _enum("modo_cuarentena", "solo_avisar", "cuarentena_automatica")
 RESULTADO_AUTH = _enum("resultado_auth", "pass", "fail", "softfail", "neutral", "none", "temperror", "permerror")
 NIVEL_RIESGO = _enum("nivel_riesgo", "bajo", "medio", "alto")
-AREA_RAZON = _enum("area_razon", "remitente", "autenticacion", "suplantacion", "contenido", "enlace", "adjunto")
+AREA_RAZON = _enum("area_razon", "remitente", "autenticacion", "suplantacion", "contenido", "enlace", "adjunto", "fraude")
 GRAVEDAD = _enum("gravedad", "baja", "media", "alta")
 TIPO_MODELO = _enum("tipo_modelo", "contenido", "enlaces")
 CATEGORIA_ENTIDAD = _enum("categoria_entidad", "banco", "billetera_digital", "gobierno", "logistica", "comercio",
@@ -146,6 +146,8 @@ class BuzonFila(Base):
     desconectado_en: Mapped[datetime | None] = mapped_column(TS)
     creado_en: Mapped[datetime] = mapped_column(TS, server_default=AHORA)
     actualizado_en: Mapped[datetime] = mapped_column(TS, server_default=AHORA)
+    vigilancia_expira_en: Mapped[datetime | None] = mapped_column(TS)       # avisos de Gmail en tiempo real
+    revision_solicitada_en: Mapped[datetime | None] = mapped_column(TS)
 
 
 # =====================================================================
@@ -199,6 +201,7 @@ class MensajeAnalizadoFila(Base):
         UniqueConstraint("buzon_id", "gmail_id", name="mensaje_unico_por_buzon"),
         Index("mensaje_buzon_fecha_idx", "buzon_id", text("recibido_en DESC")),
         Index("mensaje_remitente_dominio_idx", "remitente_dominio"),
+        Index("mensaje_buzon_remitente_idx", "buzon_id", "remitente_correo"),
     )
     id: Mapped[int] = _id()
     buzon_id: Mapped[int] = _fk("buzon.id", "CASCADE")
@@ -287,6 +290,7 @@ class EnlaceAnalizadoFila(Base):
     nivel: Mapped[str | None] = mapped_column(NIVEL_RIESGO)
     es_acortador: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     enganoso: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    origen: Mapped[str] = mapped_column(Text, server_default=text("'cuerpo'"))     # cuerpo | qr | adjunto
 
 
 # =====================================================================

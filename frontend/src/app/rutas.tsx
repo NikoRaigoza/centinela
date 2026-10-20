@@ -13,6 +13,7 @@ import { PaginaIngreso } from "../paginas/Ingreso";
 import { PaginaInicio } from "../paginas/Inicio";
 import { PaginaNoEncontrada } from "../paginas/NoEncontrada";
 import { PaginaRegistro } from "../paginas/Registro";
+import { PaginaReportes } from "../paginas/Reportes";
 import { PaginaAdminBuzones } from "../paginas/admin/Buzones";
 import { PaginaModelos } from "../paginas/admin/Modelos";
 import { PaginaUsuarios } from "../paginas/admin/Usuarios";
@@ -69,6 +70,7 @@ export const rutas: RouteObject[] = [
       { path: "/buzones", element: <PaginaBuzones /> },
       { path: "/analizar", element: <PaginaAnalizar /> },
       { path: "/asistente", element: <PaginaAsistente /> },
+      { path: "/reportes", element: <PaginaReportes /> },
       { path: "/cuenta", element: <PaginaCuenta /> },
       {
         element: <SoloAdmin />,

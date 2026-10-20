@@ -11,12 +11,25 @@ from centinela.adaptadores.entrada.api.tokens import EmisorTokens
 from centinela.adaptadores.salida.avisos import RedactorAvisosMime
 from centinela.adaptadores.salida.gemini import AsistenteGemini
 from centinela.adaptadores.salida.gmail import AutorizacionGoogle, ProveedorGmail
+from centinela.adaptadores.salida.inspector_adjuntos import InspectorAdjuntos
 from centinela.adaptadores.salida.lector_correo import LectorCorreoMime
 from centinela.adaptadores.salida.ml.registro import ProveedorModelosRegistrados
 from centinela.adaptadores.salida.postgres.uow import FabricaUnidadDeTrabajoSql, crear_motor
+from centinela.adaptadores.salida.pubsub import VerificadorOidcGoogle
 from centinela.adaptadores.salida.push import EnviadorWebPush, carga_de_aviso
+from centinela.adaptadores.salida.reportes import GeneradorReportes
 from centinela.adaptadores.salida.seguridad import CifradorFernet, HasherArgon2, RelojSistema, ServicioTotpPyotp
-from centinela.aplicacion.casos_uso import acceso, analisis, asistente, buzones, casos, notificaciones, panel
+from centinela.aplicacion.casos_uso import (
+    acceso,
+    analisis,
+    asistente,
+    buzones,
+    casos,
+    notificaciones,
+    panel,
+    reportes,
+    tiempo_real,
+)
 from centinela.aplicacion.puertos import (
     AutorizacionCorreo,
     Cifrador,
@@ -27,6 +40,7 @@ from centinela.aplicacion.puertos import (
     ProveedorCorreo,
     ProveedorModelos,
     Reloj,
+    VerificadorAvisosGmail,
 )
 from centinela.config import Configuracion, obtener_configuracion
 
@@ -62,6 +76,9 @@ class Contenedor:
     listar_mensajes: buzones.ListarMensajes
     revisar_buzon: buzones.RevisarBuzon
     revisar_pendientes: buzones.RevisarBuzonesPendientes
+    # avisos de Gmail en tiempo real
+    renovar_vigilancias: tiempo_real.RenovarVigilancias
+    recibir_aviso_gmail: tiempo_real.RecibirAvisoGmail
     # análisis y casos
     lector: LectorCorreo
     modelos: ProveedorModelos
@@ -75,6 +92,7 @@ class Contenedor:
     # panel
     resumen_panel: panel.ObtenerResumenPanel
     listar_modelos: panel.ListarModelos
+    generar_reporte: reportes.GenerarReporte
     # notificaciones push
     activar_push: notificaciones.ActivarPush
     listar_dispositivos_push: notificaciones.ListarDispositivosPush
@@ -92,7 +110,8 @@ def clave_avisos(llave_cifrado: str) -> bytes:
 
 def construir(config: Configuracion | None = None, autorizacion: AutorizacionCorreo | None = None,
               proveedor: ProveedorCorreo | None = None, enviador_push: EnviadorPush | None = None,
-              modelo_ia: ModeloLenguaje | None = None) -> Contenedor:
+              modelo_ia: ModeloLenguaje | None = None,
+              verificador_gmail: VerificadorAvisosGmail | None = None) -> Contenedor:
     """Los servicios externos (Gmail, push, IA) se pueden inyectar en las pruebas; si no, se usan los reales cuando
     están configurados."""
     config = config or obtener_configuracion()
@@ -114,7 +133,10 @@ def construir(config: Configuracion | None = None, autorizacion: AutorizacionCor
     if config.ia_configurada and modelo_ia is None:
         modelo_ia = AsistenteGemini(config.gemini_clave.get_secret_value(), config.gemini_modelo,
                                     httpx.Client(timeout=httpx.Timeout(30.0, connect=10.0)))
-    lector = LectorCorreoMime(clave_avisos(llave))
+    if config.tiempo_real_configurado and verificador_gmail is None:
+        verificador_gmail = VerificadorOidcGoogle(config.pubsub_audiencia, config.pubsub_cuenta_servicio,
+                                                  httpx.Client(timeout=httpx.Timeout(10.0, connect=5.0)))
+    lector = LectorCorreoMime(clave_avisos(llave), InspectorAdjuntos())
     modelos = ProveedorModelosRegistrados(uow, config.dir_modelos)
     motor_analisis = analisis.MotorAnalisis(modelos)
     revisar = buzones.RevisarBuzon(uow, reloj, proveedor, lector, cifrador, motor_analisis)
@@ -142,7 +164,11 @@ def construir(config: Configuracion | None = None, autorizacion: AutorizacionCor
         actualizar_buzon=buzones.ActualizarBuzon(uow, reloj),
         listar_mensajes=buzones.ListarMensajes(uow, reloj),
         revisar_buzon=revisar,
-        revisar_pendientes=buzones.RevisarBuzonesPendientes(uow, reloj, revisar),
+        revisar_pendientes=buzones.RevisarBuzonesPendientes(uow, reloj, revisar,
+                                                            tiempo_real=verificador_gmail is not None),
+        renovar_vigilancias=tiempo_real.RenovarVigilancias(
+            uow, reloj, proveedor, cifrador, config.pubsub_tema if verificador_gmail is not None else None),
+        recibir_aviso_gmail=tiempo_real.RecibirAvisoGmail(uow, reloj, verificador_gmail),
         lector=lector, modelos=modelos,
         analizar_manual=analisis.AnalizarCorreoManual(uow, reloj, lector, motor_analisis),
         listar_casos=casos.ListarCasos(uow, reloj),
@@ -155,6 +181,7 @@ def construir(config: Configuracion | None = None, autorizacion: AutorizacionCor
                                                    enviador_push, carga_de_aviso),
         resumen_panel=panel.ObtenerResumenPanel(uow, reloj),
         listar_modelos=panel.ListarModelos(uow, reloj),
+        generar_reporte=reportes.GenerarReporte(uow, reloj, GeneradorReportes()),
         activar_push=notificaciones.ActivarPush(uow, reloj, enviador_push),
         listar_dispositivos_push=notificaciones.ListarDispositivosPush(uow, reloj),
         quitar_push=notificaciones.QuitarPush(uow, reloj),

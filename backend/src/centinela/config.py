@@ -1,12 +1,15 @@
 """Configuración por variables de entorno (prefijo CENTINELA_). Nunca se escriben secretos en el código."""
 from __future__ import annotations
 
+import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_TEMA_PUBSUB = re.compile(r"^projects/[a-z][-a-z0-9]{4,28}[a-z0-9]/topics/[A-Za-z][-A-Za-z0-9_.~+%]{2,254}$")
 
 
 class Configuracion(BaseSettings):
@@ -29,6 +32,12 @@ class Configuracion(BaseSettings):
     gmail_client_secret: SecretStr | None = None
     gmail_redirect_uri: str = "http://localhost:8000/api/gmail/callback"
     url_panel: str = "http://localhost:5173"
+
+    # Avisos de Gmail en tiempo real (Google Cloud Pub/Sub). Sin esto, el worker revisa cada buzón cada 30 s.
+    # Pasos en backend/README.md («Gmail en tiempo real»). Requiere que la API sea accesible por HTTPS desde internet.
+    pubsub_tema: str | None = None               # projects/<proyecto>/topics/<tema>
+    pubsub_audiencia: str | None = None          # audiencia del token en la suscripción push (p. ej. la URL del endpoint)
+    pubsub_cuenta_servicio: str | None = None    # cuenta de servicio con la que Pub/Sub firma cada entrega
 
     # Asistente de IA (Google Gemini). Sin clave, el asistente responde en modo local con reglas.
     # La clave se crea en https://aistudio.google.com/apikey
@@ -60,6 +69,11 @@ class Configuracion(BaseSettings):
     @property
     def push_configurado(self) -> bool:
         return bool(self.vapid_clave_privada and self.vapid_clave_privada.get_secret_value() and self.vapid_contacto)
+
+    @property
+    def tiempo_real_configurado(self) -> bool:
+        return bool(self.gmail_configurado and self.pubsub_tema and _TEMA_PUBSUB.match(self.pubsub_tema)
+                    and self.pubsub_audiencia and self.pubsub_cuenta_servicio)
 
     @property
     def ia_configurada(self) -> bool:

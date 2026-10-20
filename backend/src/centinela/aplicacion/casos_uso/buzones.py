@@ -34,6 +34,7 @@ from centinela.dominio.buzon import Buzon, EstadoBuzon, ModoCuarentena
 from centinela.dominio.caso import Caso, EstadoCaso
 from centinela.dominio.correo import Mensaje, ResumenMensaje
 from centinela.dominio.errores import Conflicto, DatoInvalido, NoEncontrado, ServicioNoDisponible
+from centinela.dominio.fraude import ContextoDestinatario
 from centinela.dominio.politica import Acciones, decidir_acciones
 from centinela.dominio.riesgo import NivelRiesgo
 
@@ -41,6 +42,7 @@ log = logging.getLogger(__name__)
 
 MAX_RECUPERAR_TRAS_HUECO = 50     # si el historial expiró, se revisan los últimos N correos de la bandeja
 MAX_MENSAJES_POR_REVISION = 100
+HISTORIA_MINIMA = timedelta(days=14)
 MSG_NO_CONFIGURADO = "La conexión con Gmail no está configurada en este servidor."
 
 
@@ -283,7 +285,16 @@ class RevisarBuzon(CasoDeUso):
                 continue
             mensaje = Mensaje(buzon_id=buzon.id, gmail_id=gmail_id, gmail_hilo_id=crudo.hilo_id,
                               recibido_en=crudo.recibido_en, tamano_bytes=crudo.tamano_bytes, correo=correo)
-            resultado = self._motor.analizar(correo, catalogo) if (self._motor and correo) else None
+            resultado = None
+            if self._motor and correo:
+                # «Primera vez que te escribe» solo vale cuando ya hay historia: en un buzón recién conectado todos
+                # los remitentes serían nuevos.
+                conocido = None
+                if correo.remitente_correo and self._reloj.ahora() - buzon.conectado_en >= HISTORIA_MINIMA:
+                    with self._uow() as uow:
+                        conocido = uow.mensajes.remitente_conocido(buzon.id, correo.remitente_correo)
+                contexto = ContextoDestinatario(correo=buzon.correo_gmail, remitente_conocido=conocido)
+                resultado = self._motor.analizar(correo, catalogo, contexto)
             acciones = (decidir_acciones(resultado.veredicto.nivel, buzon.modo, buzon.avisar_por_correo)
                         if resultado else Acciones())
             # 1) Primero la acción en Gmail: si falla, no se guarda nada y la próxima revisión lo reintenta entero.
@@ -338,21 +349,28 @@ class RevisarBuzon(CasoDeUso):
 
 
 class RevisarBuzonesPendientes(CasoDeUso):
-    """Lo ejecuta el worker en cada ciclo: reclama los buzones que tocan y los revisa uno por uno."""
+    """Lo ejecuta el worker en cada ciclo: reclama los buzones que tocan y los revisa uno por uno.
+    Con avisos de Gmail en tiempo real, un buzón vigilado se revisa al llegar el aviso y, de respaldo, cada 5 min."""
 
-    def __init__(self, uow: FabricaUnidadDeTrabajo, reloj: Reloj, revisar: RevisarBuzon):
+    def __init__(self, uow: FabricaUnidadDeTrabajo, reloj: Reloj, revisar: RevisarBuzon, tiempo_real: bool = False):
         super().__init__(uow, reloj)
         self._revisar = revisar
+        self._tiempo_real = tiempo_real
 
     def intervalo_segundos(self) -> int:
         with self._uow() as uow:
             return max(10, int(uow.configuracion.obtener("analisis.intervalo_sondeo_s", 30)))
 
+    def intervalo_respaldo_segundos(self) -> int:
+        with self._uow() as uow:
+            return max(60, int(uow.configuracion.obtener("analisis.intervalo_respaldo_s", 300)))
+
     def ejecutar(self, limite: int = 20) -> list[ResumenRevision]:
         ahora = self._reloj.ahora()
         intervalo = self.intervalo_segundos()
+        respaldo = ahora - timedelta(seconds=self.intervalo_respaldo_segundos()) if self._tiempo_real else None
         with self._uow() as uow:
-            ids = uow.buzones.reclamar_pendientes(ahora - timedelta(seconds=intervalo), ahora, limite)
+            ids = uow.buzones.reclamar_pendientes(ahora - timedelta(seconds=intervalo), ahora, limite, respaldo)
             uow.confirmar()
         resumenes = []
         for buzon_id in ids:

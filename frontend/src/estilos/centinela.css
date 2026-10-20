@@ -496,3 +496,36 @@ details.plegable[open] > summary { margin-bottom: 12px; }
   .chat-cabecera, .mensajes, .redactar { padding-left: 14px; padding-right: 14px; }
   .aviso-ia { padding: 0 14px 14px; }
 }
+
+/* ------------------------------------------------------------------ adjuntos y origen de enlaces */
+.lista-adjuntos { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.lista-adjuntos li { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--borde);
+  border-radius: var(--radio-sm); }
+.lista-adjuntos li > svg { flex: none; margin-top: 2px; color: var(--texto-2); }
+.lista-adjuntos li.peligroso { border-color: transparent; background: var(--alto-suave); }
+.lista-adjuntos li.peligroso > svg { color: var(--alto); }
+.lista-adjuntos .nombre { font-weight: 600; overflow-wrap: anywhere; }
+.lista-adjuntos .motivo { font-size: 0.88rem; margin-top: 2px; }
+.insignia svg { vertical-align: -2px; }
+
+/* ------------------------------------------------------------------ reportes */
+.alcance-reporte { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0 0 16px; padding: 12px;
+  border: 1px solid var(--borde); }
+.alcance-reporte label { display: flex; gap: 10px; align-items: flex-start; padding: 12px; border: 1px solid var(--borde);
+  border-radius: var(--radio-sm); cursor: pointer; }
+.alcance-reporte label.activo { border-color: var(--primario); background: var(--primario-suave); }
+.alcance-reporte label > svg { flex: none; margin-top: 2px; color: var(--primario); }
+.alcance-reporte input { margin-top: 3px; accent-color: var(--primario); }
+.alcance-reporte span { display: grid; gap: 2px; }
+.resumen-reporte { margin: 0 0 16px; }
+.formato-reporte { display: grid; gap: 14px; align-content: start; }
+.formato-reporte h2 { margin: 0; }
+.formato-reporte ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; color: var(--texto-2); }
+.formato-reporte .boton { justify-self: start; }
+.icono-formato { display: grid; place-items: center; width: 44px; height: 44px; border-radius: var(--radio-sm); flex: none; }
+.icono-formato.pdf { background: var(--alto-suave); color: var(--alto); }
+.icono-formato.xlsx { background: var(--bajo-suave); color: var(--bajo); }
+@media (max-width: 720px) {
+  .alcance-reporte { grid-template-columns: 1fr; }
+  .formato-reporte .boton { justify-self: stretch; }
+}

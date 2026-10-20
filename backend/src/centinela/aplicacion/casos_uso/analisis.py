@@ -18,6 +18,7 @@ from centinela.aplicacion.puertos import (
 from centinela.dominio.correo import CorreoParseado
 from centinela.dominio.dominios import dominio_enganoso, host_de_url
 from centinela.dominio.entidades import CatalogoEntidades
+from centinela.dominio.fraude import ContextoDestinatario
 from centinela.dominio.idioma import detectar_idioma
 from centinela.dominio.reglas import evaluar_reglas
 from centinela.dominio.riesgo import (
@@ -61,9 +62,10 @@ class MotorAnalisis:
     def __init__(self, modelos: ProveedorModelos):
         self._modelos = modelos
 
-    def analizar(self, correo: CorreoParseado, catalogo: CatalogoEntidades) -> ResultadoAnalisis:
+    def analizar(self, correo: CorreoParseado, catalogo: CatalogoEntidades,
+                 contexto: ContextoDestinatario | None = None) -> ResultadoAnalisis:
         inicio = time.perf_counter()
-        reglas = evaluar_reglas(correo, catalogo)
+        reglas = evaluar_reglas(correo, catalogo, contexto)
 
         clasificador_texto = self._modelos.contenido()
         contenido = None
@@ -75,6 +77,8 @@ class MotorAnalisis:
         enlaces = clasificador_enlaces.evaluar(urls[:MAX_ENLACES_MODELO]) if clasificador_enlaces and urls else []
         visibles_por_url = {e.url: dominio_enganoso(e.url, e.texto_visible) for e in reversed(correo.enlaces)}
         enlaces = [replace(e, dominio_visible=v, enganoso=True) if (v := visibles_por_url.get(e.url)) else e for e in enlaces]
+        origen_por_url = {e.url: e.origen.value for e in reversed(correo.enlaces)}
+        enlaces = [replace(e, origen=origen_por_url.get(e.url, "cuerpo")) for e in enlaces]
         probabilidades = [e.probabilidad for e in enlaces if e.probabilidad is not None]
         p_enlaces = mean(probabilidades) if probabilidades else None       # el promedio fue lo más estable
 

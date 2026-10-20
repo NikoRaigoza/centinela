@@ -93,9 +93,9 @@ export interface OpcionesPeticion {
   señal?: AbortSignal;
 }
 
-export async function pedir<T>(ruta: string, op: OpcionesPeticion = {}): Promise<T> {
+async function peticion(ruta: string, op: OpcionesPeticion, aceptar = "application/json"): Promise<Response> {
   const enviar = () => {
-    const cabeceras: Record<string, string> = { Accept: "application/json" };
+    const cabeceras: Record<string, string> = { Accept: aceptar };
     const token = op.token ?? tokenAcceso;
     if (token) cabeceras.Authorization = `Bearer ${token}`;
     let body: BodyInit | undefined;
@@ -117,8 +117,44 @@ export async function pedir<T>(ruta: string, op: OpcionesPeticion = {}): Promise
     r = await enviar();
   }
   if (!r.ok) throw await leerError(r);
+  return r;
+}
+
+export async function pedir<T>(ruta: string, op: OpcionesPeticion = {}): Promise<T> {
+  const r = await peticion(ruta, op);
   if (r.status === 204) return undefined as T;
   return (await r.json()) as T;
+}
+
+export interface ArchivoDescargado {
+  blob: Blob;
+  nombre: string;
+}
+
+/** Nombre del archivo que propone el servidor (Content-Disposition), sin rutas ni caracteres raros. */
+export function nombreDeArchivo(disposicion: string | null, porDefecto: string): string {
+  const m = /filename="?([^";]+)"?/i.exec(disposicion ?? "");
+  const nombre = (m?.[1] ?? "").replace(/[\\/:*?"<>|\u0000-\u001f]/g, "").trim();
+  return nombre || porDefecto;
+}
+
+/** Descarga un archivo con la sesión actual (el token va en la cabecera, no en la URL). */
+export async function descargar(ruta: string, porDefecto: string, señal?: AbortSignal): Promise<ArchivoDescargado> {
+  const r = await peticion(ruta, { señal }, "*/*");
+  return { blob: await r.blob(), nombre: nombreDeArchivo(r.headers.get("Content-Disposition"), porDefecto) };
+}
+
+/** Entrega al navegador un archivo ya descargado para que lo guarde. */
+export function guardarArchivo({ blob, nombre }: ArchivoDescargado): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nombre;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
 
 export function mensajeDeError(error: unknown): string {

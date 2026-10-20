@@ -68,3 +68,40 @@ def dominio_enganoso(url: str, texto_visible: str) -> str | None:
         return None
     real, visible = dominio_registrado(host), dominio_en_texto(texto_visible)
     return visible if visible and real and visible != real else None
+
+
+_HOMOGLIFOS = (("rn", "m"), ("vv", "w"), ("0", "o"), ("1", "l"), ("3", "e"), ("5", "s"), ("-", ""))
+
+
+def _nombre_base(dominio: str) -> str:
+    """«empresa» en empresa.com.co: lo que va antes de la terminación, sin guiones ni letras disfrazadas."""
+    reg = dominio_registrado(dominio)
+    nombre = reg.split(".", 1)[0]
+    for falso, real in _HOMOGLIFOS:
+        nombre = nombre.replace(falso, real)
+    return nombre
+
+
+def _distancia(a: str, b: str) -> int:
+    """Distancia de edición (Levenshtein): cuántas letras hay que cambiar, quitar o poner para pasar de a a b."""
+    previa = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        actual = [i]
+        for j, cb in enumerate(b, 1):
+            actual.append(min(previa[j] + 1, actual[j - 1] + 1, previa[j - 1] + (ca != cb)))
+        previa = actual
+    return previa[-1]
+
+
+def dominio_parecido(dominio: str, referencia: str) -> bool:
+    """True si `dominio` imita a `referencia` sin ser el mismo: empresa-co.com, ernpresa.co o empresa.net frente a
+    empresa.co. Es la técnica de los fraudes que se hacen pasar por un compañero de trabajo o un proveedor."""
+    a, b = dominio_registrado(dominio), dominio_registrado(referencia)
+    if not a or not b or a == b:
+        return False
+    na, nb = _nombre_base(a), _nombre_base(b)
+    if len(nb) < 4:                          # nombres muy cortos se parecen por azar
+        return False
+    if na == nb or _distancia(na, nb) <= (1 if len(nb) <= 6 else 2):
+        return True
+    return na.startswith(nb) and len(na) - len(nb) <= 4          # acme-co, acmecol, acmesas: el nombre + un sufijo

@@ -6,8 +6,9 @@ import { useRef, useState, type DragEvent } from "react";
 import { mensajeDeError } from "../api/cliente";
 import { analisis } from "../api/servicios";
 import type { Analisis } from "../api/tipos";
+import { ListaAdjuntos } from "../componentes/Adjuntos";
 import { Alerta, Girando, InsigniaNivel } from "../componentes/ui";
-import { AREA, formatoPorcentaje } from "../utilidades/textos";
+import { AREA, ORIGEN_ENLACE, formatoPorcentaje } from "../utilidades/textos";
 
 const MAX_BYTES = 10_000_000;
 
@@ -39,6 +40,12 @@ function Resultado({ r }: { r: Analisis }) {
           {r.razones.map((x) => <li key={x.texto}><div><div className="area">{AREA[x.area]}</div>{x.texto}</div></li>)}
         </ol>
       )}
+      {r.adjuntos.length > 0 && (
+        <div>
+          <h3 style={{ marginBottom: 8 }}>Adjuntos revisados por dentro ({r.adjuntos.length})</h3>
+          <ListaAdjuntos adjuntos={r.adjuntos} />
+        </div>
+      )}
       {r.senales_positivas.length > 0 && (
         <Alerta tipo="exito">
           <strong>Señales de confianza:</strong>
@@ -52,7 +59,8 @@ function Resultado({ r }: { r: Analisis }) {
           <Componente nombre="Enlaces (modelo)" p={r.componentes.enlaces} />
           <Componente nombre="Reglas técnicas" p={r.componentes.tecnico} />
           {r.enlaces.length > 0 && (
-            <p className="muy-tenue">Dominios enlazados: {r.enlaces.map((e) => `${e.dominio} (${formatoPorcentaje(e.probabilidad)})`).join(", ")}</p>
+            <p className="muy-tenue">Dominios enlazados: {r.enlaces.map((e) => `${e.dominio} (${formatoPorcentaje(e.probabilidad)}`
+              + `${e.origen && e.origen !== "cuerpo" ? ` · ${ORIGEN_ENLACE[e.origen].toLowerCase()}` : ""})`).join(", ")}</p>
           )}
           {r.todas_las_razones.length > r.razones.length && (
             <ul className="pila" style={{ margin: 0, paddingLeft: 18, gap: 4 }}>

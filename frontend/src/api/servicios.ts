@@ -1,6 +1,6 @@
 // Una función por operación de la API. Las pantallas usan estas funciones, nunca `fetch` directamente.
 
-import { pedir } from "./cliente";
+import { descargar, pedir } from "./cliente";
 import type {
   AccionCuenta,
   Activacion2FA,
@@ -17,6 +17,7 @@ import type {
   EstadoAsistente,
   EstadoCaso,
   EstadoCuenta,
+  FormatoReporte,
   MensajeRecibido,
   ModoCuarentena,
   Modelo,
@@ -52,6 +53,13 @@ export const cuenta = {
 
 export const panel = {
   resumen: (dias: number) => pedir<ResumenPanel>(`/api/panel/resumen?dias=${dias}`),
+};
+
+export const reportes = {
+  descargar: (formato: FormatoReporte, dias: number, organizacion = false) => {
+    const q = new URLSearchParams({ formato, dias: String(dias), organizacion: String(organizacion) });
+    return descargar(`/api/reportes?${q}`, `centinela-reporte.${formato}`);
+  },
 };
 
 export const buzones = {

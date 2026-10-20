@@ -5,12 +5,16 @@ cookie con un valor aleatorio (nonce) que debe coincidir con el del `state` cuan
 """
 from __future__ import annotations
 
+import base64
+import binascii
 import hmac
 import html
+import json
+import logging
 import secrets
 from typing import Annotated
 
-from fastapi import APIRouter, Cookie, Query, Response
+from fastapi import APIRouter, Cookie, Header, Query, Request, Response, status
 from fastapi.responses import HTMLResponse
 
 from centinela.adaptadores.entrada.api.dependencias import Actual, Admin, Cont, Ctx
@@ -25,7 +29,10 @@ from centinela.adaptadores.entrada.api.tokens import MINUTOS_OAUTH
 from centinela.aplicacion.casos_uso.buzones import nuevo_verificador_pkce
 from centinela.dominio.errores import AccesoDenegado, DatoInvalido, ErrorCentinela
 
+log = logging.getLogger(__name__)
+
 COOKIE_OAUTH = "centinela_oauth"
+MAX_BYTES_NOTIFICACION = 64_000
 RUTA_OAUTH = "/api/gmail"
 
 buzones = APIRouter(prefix="/api/buzones", tags=["Buzones"])
@@ -79,21 +86,45 @@ def callback(c: Cont, ctx: Ctx, state: str | None = None, code: str | None = Non
     return respuesta
 
 
+def _correo_de_notificacion(cuerpo: bytes) -> str | None:
+    """Sobre de Pub/Sub: {"message": {"data": base64({"emailAddress": ..., "historyId": ...})}, "subscription": ...}"""
+    try:
+        sobre = json.loads(cuerpo)
+        datos = json.loads(base64.b64decode(sobre["message"]["data"], validate=False))
+        correo = datos.get("emailAddress")
+        return correo if isinstance(correo, str) and "@" in correo and len(correo) <= 320 else None
+    except (ValueError, KeyError, TypeError, binascii.Error):
+        return None
+
+
+@gmail.post("/notificaciones", status_code=status.HTTP_204_NO_CONTENT, include_in_schema=False)
+async def notificacion_gmail(request: Request, c: Cont,
+                             authorization: Annotated[str | None, Header()] = None) -> Response:
+    """Lo llama Google Cloud Pub/Sub cuando llega un correo a un buzón vigilado. Responde 204 aunque el buzón no exista
+    (si no, Pub/Sub reintentaría para siempre); solo un token inválido se rechaza."""
+    cuerpo = await request.body()
+    token = authorization[7:].strip() if authorization and authorization[:7].lower() == "bearer " else None
+    correo = _correo_de_notificacion(cuerpo[:MAX_BYTES_NOTIFICACION]) if len(cuerpo) <= MAX_BYTES_NOTIFICACION else None
+    c.recibir_aviso_gmail.ejecutar(token, correo)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @buzones.get("", response_model=list[BuzonPublico])
 def mis_buzones(yo: Actual, c: Cont) -> list[BuzonPublico]:
-    return [BuzonPublico.desde(b) for b in c.listar_buzones.ejecutar(yo.usuario_id)]
+    ahora = c.reloj.ahora()
+    return [BuzonPublico.desde(b, ahora) for b in c.listar_buzones.ejecutar(yo.usuario_id)]
 
 
 @buzones.patch("/{buzon_id}", response_model=BuzonPublico)
 def actualizar(buzon_id: int, datos: CambiosBuzon, yo: Actual, c: Cont, ctx: Ctx) -> BuzonPublico:
     b = c.actualizar_buzon.ejecutar(yo.usuario_id, buzon_id, modo=datos.modo,
                                     avisar_por_correo=datos.avisar_por_correo, pausado=datos.pausado, ctx=ctx)
-    return BuzonPublico.desde(b)
+    return BuzonPublico.desde(b, c.reloj.ahora())
 
 
 @buzones.delete("/{buzon_id}", response_model=BuzonPublico)
 def desconectar(buzon_id: int, yo: Actual, c: Cont, ctx: Ctx) -> BuzonPublico:
-    return BuzonPublico.desde(c.desconectar_buzon.ejecutar(yo.usuario_id, buzon_id, ctx))
+    return BuzonPublico.desde(c.desconectar_buzon.ejecutar(yo.usuario_id, buzon_id, ctx), c.reloj.ahora())
 
 
 @buzones.post("/{buzon_id}/revision", response_model=ResumenRevisionPublico)
@@ -109,4 +140,5 @@ def mensajes(buzon_id: int, yo: Actual, c: Cont,
 
 @admin_buzones.get("", response_model=list[BuzonPublico])
 def todos_los_buzones(yo: Admin, c: Cont) -> list[BuzonPublico]:
-    return [BuzonPublico.desde(b) for b in c.listar_todos_los_buzones.ejecutar(yo.usuario_id)]
+    ahora = c.reloj.ahora()
+    return [BuzonPublico.desde(b, ahora) for b in c.listar_todos_los_buzones.ejecutar(yo.usuario_id)]

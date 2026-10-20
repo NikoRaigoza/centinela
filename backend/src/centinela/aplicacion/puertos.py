@@ -77,6 +77,13 @@ class PerfilBuzon:
 
 
 @dataclass(frozen=True)
+class Vigilancia:
+    """Respuesta de Gmail al pedir avisos en tiempo real (users.watch)."""
+    history_id: int
+    expira_en: datetime
+
+
+@dataclass(frozen=True)
 class CambiosBuzon:
     ids_nuevos: list[str]
     history_id: int
@@ -106,6 +113,9 @@ class ClienteCorreo(Protocol):
     def obtener(self, gmail_id: str) -> MensajeCrudo: ...
     def modificar_etiquetas(self, gmail_id: str, agregar: list[str], quitar: list[str]) -> None: ...
     def insertar(self, crudo: bytes, etiquetas: list[str]) -> str: ...
+    def vigilar(self, tema: str) -> Vigilancia:
+        """Pide a Gmail que publique en el tema de Pub/Sub cada vez que llegue algo a la bandeja de entrada."""
+        ...
 
 
 class ProveedorCorreo(Protocol):
@@ -114,6 +124,16 @@ class ProveedorCorreo(Protocol):
 
 class LectorCorreo(Protocol):
     def leer(self, crudo: bytes) -> CorreoParseado: ...
+
+
+class AvisoNoAutentico(Exception):
+    """La notificación no la firmó Google con la cuenta de servicio configurada."""
+
+
+class VerificadorAvisosGmail(Protocol):
+    def verificar(self, token: str) -> None:
+        """Valida el token OIDC que Pub/Sub adjunta a cada notificación. Lanza AvisoNoAutentico si no es válido."""
+        ...
 
 
 # ---------------------------------------------------------------------- modelos de machine learning
@@ -133,6 +153,7 @@ class EvaluacionEnlace:
     probabilidad: float | None        # None si el modelo no aplica (p. ej. enlace acortado)
     dominio_visible: str | None = None   # el dominio que muestra el texto del enlace, si es distinto del real
     enganoso: bool = False
+    origen: str = "cuerpo"               # cuerpo | qr | adjunto
 
 
 class ClasificadorContenido(Protocol):
@@ -241,8 +262,15 @@ class RepoBuzones(Protocol):
     def todos(self) -> list[Buzon]: ...
     def agregar(self, buzon: Buzon) -> Buzon: ...
     def guardar(self, buzon: Buzon) -> None: ...
-    def reclamar_pendientes(self, revisados_antes_de: datetime, ahora: datetime, limite: int) -> list[int]:
+    def reclamar_pendientes(self, revisados_antes_de: datetime, ahora: datetime, limite: int,
+                            respaldo_antes_de: datetime | None = None) -> list[int]:
         """Marca y devuelve buzones activos que tocan revisar. Seguro con varios workers a la vez."""
+        ...
+    def solicitar_revision(self, buzon_id: int, ahora: datetime) -> None:
+        """Gmail avisó de un correo nuevo: el buzón se revisa en el siguiente ciclo y se despierta al worker."""
+        ...
+    def por_vigilar(self, renovar_antes_de: datetime, limite: int) -> list[Buzon]:
+        """Buzones activos sin avisos en tiempo real o cuyo permiso de avisos vence pronto."""
         ...
 
 
@@ -252,6 +280,9 @@ class RepoMensajes(Protocol):
         """Guarda el mensaje; devuelve None si ya estaba (idempotente)."""
         ...
     def recientes(self, buzon_id: int, limite: int) -> list[ResumenMensaje]: ...
+    def remitente_conocido(self, buzon_id: int, remitente_correo: str) -> bool:
+        """¿Ese remitente ya había escrito antes a este buzón? (para detectar fraudes de suplantación)."""
+        ...
 
 
 @dataclass(frozen=True)
@@ -325,6 +356,7 @@ class EnlaceGuardado:
     dominio: str
     probabilidad: float | None
     enganoso: bool
+    origen: str = "cuerpo"
 
 
 @dataclass(frozen=True)
@@ -332,6 +364,8 @@ class AdjuntoGuardado:
     nombre: str
     tipo_mime: str | None
     tamano_bytes: int | None
+    peligroso: bool = False
+    motivo: str | None = None
 
 
 @dataclass(frozen=True)
@@ -360,6 +394,9 @@ class RepoCasos(Protocol):
     def guardar(self, caso: Caso) -> None: ...
     def contexto(self, caso_id: int) -> ContextoCaso | None: ...
     def listar(self, usuario_id: int, estados: list[str] | None, limite: int, desde: int) -> list[ResumenCaso]: ...
+    def del_periodo(self, usuario_id: int, desde: datetime, hasta: datetime, limite: int) -> list[ResumenCaso]:
+        """Casos de los correos recibidos en el periodo, del más reciente al más antiguo."""
+        ...
     def detalle(self, caso_id: int) -> DetalleCaso | None: ...
 
 
@@ -383,7 +420,46 @@ class EstadisticasPanel:
 
 
 class RepoEstadisticas(Protocol):
-    def panel(self, usuario_id: int, desde: datetime, zona: str) -> EstadisticasPanel: ...
+    def panel(self, usuario_id: int | None, desde: datetime, zona: str) -> EstadisticasPanel:
+        """usuario_id None: todos los buzones (reporte de la organización, solo cifras)."""
+        ...
+    def indicadores(self, usuario_id: int | None, desde: datetime) -> dict[str, int]:
+        """Correos de riesgo por área de la razón principal, más enlaces de QR y adjuntos peligrosos."""
+        ...
+    def por_buzon(self, desde: datetime) -> list[FilaBuzonReporte]: ...
+
+
+# ---------------------------------------------------------------------- reportes
+@dataclass(frozen=True)
+class FilaBuzonReporte:
+    correo: str
+    estado: str
+    revisados: int
+    sospechosos: int
+    peligrosos: int
+
+
+@dataclass(frozen=True)
+class DatosReporte:
+    """Todo lo que lleva un reporte. El de la organización (admin) no incluye asuntos ni remitentes: solo cifras."""
+    titulo: str
+    alcance: str
+    persona: str
+    generado_en: datetime
+    desde: date
+    hasta: date
+    estadisticas: EstadisticasPanel
+    indicadores: dict[str, int]
+    organizacion: bool = False
+    casos: list[ResumenCaso] = field(default_factory=list)
+    casos_truncados: bool = False
+    buzones: list[FilaBuzonReporte] = field(default_factory=list)
+    modelos: list[ModeloRegistrado] = field(default_factory=list)
+
+
+class GeneradorReportes(Protocol):
+    def pdf(self, datos: DatosReporte) -> bytes: ...
+    def excel(self, datos: DatosReporte) -> bytes: ...
 
 
 @dataclass(frozen=True)

@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import and_, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -21,8 +21,11 @@ from centinela.adaptadores.salida.postgres.tablas import (
 from centinela.aplicacion.puertos import EventoAuditoria
 from centinela.dominio.buzon import Buzon, EstadoBuzon, ModoCuarentena
 from centinela.dominio.correo import Mensaje, ResultadoAuth, ResumenMensaje
+from centinela.dominio.reglas import riesgo_adjunto
 from centinela.dominio.sesion import Sesion
 from centinela.dominio.usuario import EstadoCuenta, Rol, Usuario
+
+CANAL_REVISION = "centinela_revision"      # canal LISTEN/NOTIFY con el que la API despierta al worker
 
 _CAMPOS_USUARIO = ("correo", "nombre", "clave_hash", "totp_secreto_cifrado", "totp_activo", "totp_ultimo_paso",
                    "intentos_fallidos", "bloqueado_hasta", "aprobado_por", "aprobado_en", "ultimo_acceso")
@@ -145,7 +148,7 @@ class RegistroAuditoriaSql:
 # ---------------------------------------------------------------------- buzones y mensajes
 _CAMPOS_BUZON = ("usuario_id", "correo_gmail", "refresh_token_cifrado", "avisar_por_correo", "etiqueta_cuarentena_id",
                  "etiqueta_sospechoso_id", "ultima_revision_en", "errores_consecutivos", "ultimo_error", "conectado_en",
-                 "desconectado_en")
+                 "desconectado_en", "vigilancia_expira_en")
 
 
 def _a_buzon(f: BuzonFila) -> Buzon:
@@ -193,16 +196,37 @@ class RepoBuzonesSql:
         _volcar_buzon(buzon, f)
         self._s.flush()
 
-    def reclamar_pendientes(self, revisados_antes_de: datetime, ahora: datetime, limite: int) -> list[int]:
+    def reclamar_pendientes(self, revisados_antes_de: datetime, ahora: datetime, limite: int,
+                            respaldo_antes_de: datetime | None = None) -> list[int]:
+        """Buzones que tocan: los que Gmail avisó que recibieron algo, y los que llevan un intervalo sin revisarse
+        (más largo si Gmail avisa en tiempo real: esa revisión es solo de respaldo)."""
+        vigilado = BuzonFila.vigilancia_expira_en > ahora
+        vencido = or_(BuzonFila.ultima_revision_en.is_(None),
+                      and_(~vigilado.is_(True), BuzonFila.ultima_revision_en < revisados_antes_de),
+                      and_(vigilado.is_(True), BuzonFila.ultima_revision_en < (respaldo_antes_de or revisados_antes_de)))
         pendientes = (select(BuzonFila.id)
                       .where(BuzonFila.estado == EstadoBuzon.ACTIVO.value,
-                             or_(BuzonFila.ultima_revision_en.is_(None), BuzonFila.ultima_revision_en < revisados_antes_de))
-                      .order_by(BuzonFila.ultima_revision_en.asc().nulls_first())
+                             or_(BuzonFila.revision_solicitada_en.is_not(None), vencido))
+                      .order_by(BuzonFila.revision_solicitada_en.asc().nulls_last(),
+                                BuzonFila.ultima_revision_en.asc().nulls_first())
                       .limit(limite)
                       .with_for_update(skip_locked=True))
         r = self._s.execute(update(BuzonFila).where(BuzonFila.id.in_(pendientes.scalar_subquery()))
-                            .values(ultima_revision_en=ahora).returning(BuzonFila.id))
+                            .values(ultima_revision_en=ahora, revision_solicitada_en=None).returning(BuzonFila.id))
         return [fila[0] for fila in r]
+
+    def solicitar_revision(self, buzon_id: int, ahora: datetime) -> None:
+        self._s.execute(update(BuzonFila).where(BuzonFila.id == buzon_id).values(revision_solicitada_en=ahora))
+        # Despierta al worker al confirmar la transacción (LISTEN/NOTIFY de PostgreSQL)
+        self._s.execute(text("SELECT pg_notify(:canal, :carga)"), {"canal": CANAL_REVISION, "carga": str(buzon_id)})
+
+    def por_vigilar(self, renovar_antes_de: datetime, limite: int) -> list[Buzon]:
+        q = (select(BuzonFila).where(BuzonFila.estado == EstadoBuzon.ACTIVO.value,
+                                     BuzonFila.refresh_token_cifrado.is_not(None),
+                                     or_(BuzonFila.vigilancia_expira_en.is_(None),
+                                         BuzonFila.vigilancia_expira_en < renovar_antes_de))
+             .order_by(BuzonFila.vigilancia_expira_en.asc().nulls_first()).limit(limite))
+        return [_a_buzon(f) for f in self._s.scalars(q)]
 
 
 class RepoMensajesSql:
@@ -238,12 +262,19 @@ class RepoMensajesSql:
         if nuevo_id is None:
             return None
         if c:
+            riesgos = [riesgo_adjunto(a) for a in c.adjuntos]
             self._s.add_all(AdjuntoAnalizadoFila(mensaje_id=nuevo_id, nombre=a.nombre, extension=a.extension,
-                                                 tipo_mime=a.tipo_mime, tamano_bytes=a.tamano_bytes, sha256=a.sha256)
-                            for a in c.adjuntos)
+                                                 tipo_mime=a.tipo_mime, tamano_bytes=a.tamano_bytes, sha256=a.sha256,
+                                                 peligroso=r is not None, motivo=r[1] if r else None)
+                            for a, r in zip(c.adjuntos, riesgos, strict=True))
         self._s.flush()
         mensaje.id = nuevo_id
         return nuevo_id
+
+    def remitente_conocido(self, buzon_id: int, remitente_correo: str) -> bool:
+        return self._s.scalar(select(MensajeAnalizadoFila.id).where(
+            MensajeAnalizadoFila.buzon_id == buzon_id,
+            MensajeAnalizadoFila.remitente_correo == remitente_correo.lower()).limit(1)) is not None
 
     def recientes(self, buzon_id: int, limite: int) -> list[ResumenMensaje]:
         q = (select(MensajeAnalizadoFila).where(MensajeAnalizadoFila.buzon_id == buzon_id)

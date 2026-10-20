@@ -58,6 +58,9 @@ class EstadoAsistente:
     restantes_ia: int
 
 
+_ORIGEN = {"cuerpo": "en el texto", "qr": "en un código QR de una imagen", "adjunto": "dentro de un adjunto"}
+
+
 def contexto_de_caso(caso_id: int, d: DetalleCaso) -> dict[str, Any]:
     r = d.resumen
     correo = r.remitente_correo or ""
@@ -75,8 +78,9 @@ def contexto_de_caso(caso_id: int, d: DetalleCaso) -> dict[str, Any]:
         "dominio_remitente": correo.rsplit("@", 1)[-1].lower() if "@" in correo else None,
         "asunto": anonimizar(r.asunto, 150) or None,
         "spf": d.spf, "dkim": d.dkim, "dmarc": d.dmarc,
-        "enlaces": [{"dominio": e.dominio, "enganoso": e.enganoso} for e in d.enlaces[:10]],
-        "adjuntos": [anonimizar(a.nombre, 60) for a in d.adjuntos[:5]],
+        "enlaces": [{"dominio": e.dominio, "enganoso": e.enganoso, "origen": _ORIGEN.get(e.origen, e.origen)}
+                    for e in d.enlaces[:10]],
+        "adjuntos": [{"nombre": anonimizar(a.nombre, 60), "peligroso": a.peligroso} for a in d.adjuntos[:5]],
         "recibido": r.recibido_en.astimezone(ZONA).strftime("%Y-%m-%d %H:%M"),
     }
 

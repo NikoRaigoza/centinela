@@ -1,7 +1,7 @@
 """Gmail simulado en memoria: implementa los mismos puertos que el adaptador real de Google."""
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from email.message import EmailMessage
 
 from centinela.aplicacion.casos_uso.buzones import reto_pkce
@@ -15,6 +15,7 @@ from centinela.aplicacion.puertos import (
     MensajeNoDisponible,
     PerfilBuzon,
     PermisoInsuficiente,
+    Vigilancia,
 )
 from centinela.dominio.buzon import EtiquetasCentinela
 
@@ -51,6 +52,7 @@ class BuzonGmailFalso:
         self.revocado = False
         self.falla: str | None = None
         self.historial_expirado = False
+        self.vigilado_en: str | None = None
 
     def llega(self, crudo: bytes, etiquetas=("INBOX", "UNREAD")) -> str:
         self.history_id += 1
@@ -103,6 +105,11 @@ class ClienteGmailFalso:
 
     def insertar(self, crudo, etiquetas):
         return self.b.llega(crudo, etiquetas)
+
+    def vigilar(self, tema):
+        self._revisar()
+        self.b.vigilado_en = tema
+        return Vigilancia(self.b.history_id, datetime.now(UTC) + timedelta(days=7))
 
 
 class ProveedorGmailFalso:

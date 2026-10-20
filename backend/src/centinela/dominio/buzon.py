@@ -45,6 +45,7 @@ class Buzon:
     errores_consecutivos: int = 0
     ultimo_error: str | None = None
     desconectado_en: datetime | None = None
+    vigilancia_expira_en: datetime | None = None    # hasta cuándo Gmail avisa en tiempo real de los correos nuevos
     id: int | None = None
 
     @classmethod
@@ -65,11 +66,15 @@ class Buzon:
         self.estado = EstadoBuzon.ACTIVO
         self.errores_consecutivos, self.ultimo_error = 0, None
         self.conectado_en, self.desconectado_en = ahora, None
+        self.vigilancia_expira_en = None          # el worker vuelve a pedir los avisos en tiempo real
 
     # ------------------------------------------------------------------ consultas
     @property
     def revisable(self) -> bool:
         return self.estado is EstadoBuzon.ACTIVO and self.refresh_token_cifrado is not None
+
+    def en_tiempo_real(self, ahora: datetime) -> bool:
+        return self.revisable and self.vigilancia_expira_en is not None and self.vigilancia_expira_en > ahora
 
     def verificar_dueno(self, usuario_id: int) -> None:
         if self.usuario_id != usuario_id:
@@ -91,6 +96,11 @@ class Buzon:
         self.refresh_token_cifrado = None
         self.estado = EstadoBuzon.REVOCADO
         self.desconectado_en = ahora
+        self.vigilancia_expira_en = None
+
+    def registrar_vigilancia(self, expira_en: datetime | None) -> None:
+        """Gmail confirmó (o dejó de confirmar, con None) que avisará de los correos nuevos hasta esa fecha."""
+        self.vigilancia_expira_en = expira_en
 
     # ------------------------------------------------------------------ resultado de cada revisión
     def registrar_revision(self, history_id: int, ahora: datetime) -> None:

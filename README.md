@@ -16,14 +16,14 @@ backend/            API y lógica (Python, FastAPI, arquitectura hexagonal)
     adaptadores/
       entrada/      API REST y consola
       salida/       PostgreSQL, Gmail (OAuth2 + API), lector MIME, criptografía
-  migraciones/      Alembic (la migración 0001 crea el esquema completo)
+  migraciones/      Alembic (0001 crea el esquema; las siguientes lo amplían sin tocarla)
   tests/            Unitarias (sin BD) e integración (PostgreSQL real)
 frontend/           Panel web (React + TypeScript + Vite)
   src/api/          Cliente HTTP (sesión segura) y una función por operación de la API
   src/paginas/      Pantallas: inicio, correos de riesgo, buzones, análisis, cuenta, administración
   src/componentes/  Piezas reutilizables (gráfico, diálogos, código QR del 2FA…)
 ml/                 Entrenamiento y evaluación de los modelos (ver ml/README.md)
-docs/               Diseño del modelo de datos y guía de conexión con Gmail
+docs/               Diseño del modelo de datos y guías de Gmail (conexión y tiempo real)
 legacy/             Prototipo original en Streamlit (solo referencia)
 docker-compose.yml  Base de datos PostgreSQL en contenedor
 ```
@@ -70,6 +70,24 @@ cd frontend && npm test
     También se puede instalar como app («Agregar a la pantalla principal»).
   - *iPhone / iPad* (iOS 16.4 o posterior): solo si Centinela se agrega a la pantalla de inicio desde Safari
     (Compartir → Agregar a inicio), se abre desde ese ícono, se inicia sesión ahí y se activan los avisos.
+
+### Detección avanzada, reportes y Gmail en tiempo real
+
+- **Adjuntos por dentro**: además del nombre, Centinela mira el contenido real de cada adjunto, en memoria y sin
+  guardarlo: programas disfrazados de PDF o de foto, comprimidos con programas adentro (también un .zip dentro de otro),
+  comprimidos con clave, Office con macros o con plantilla remota, PDF con código o archivos ocultos, y páginas HTML/SVG
+  que piden la contraseña o ejecutan código. El caso muestra cada adjunto con el motivo si es peligroso.
+- **Códigos QR (quishing)**: lee los QR de las imágenes del correo y de los PDF adjuntos (zxing-cpp) y analiza su enlace
+  como cualquier otro. Un QR hacia un sitio oficial del catálogo (p. ej. el de la DIAN en una factura electrónica) o
+  hacia el propio dominio del remitente no se marca.
+- **Fraude sin enlaces**: detector con puntaje para la suplantación de un jefe o proveedor (BEC), las tarjetas de regalo,
+  el cambio de cuenta bancaria y la extorsión en criptomonedas. Suma lo que el correo pide y el contexto del remitente
+  (cuenta gratuita, dominio parecido al de la organización, respuestas a otro dominio, primera vez que escribe).
+- **Reportes** (menú **Reportes**): PDF y Excel del periodo (7, 30, 90 o 365 días) con indicadores, gráfico por día,
+  tipos de amenaza, entidades suplantadas y el detalle de cada correo de riesgo. El administrador puede descargar el
+  de toda la organización, solo con cifras. Cada descarga queda en la auditoría.
+- **Gmail en tiempo real** (opcional): con Google Cloud Pub/Sub, Gmail avisa apenas llega un correo y el worker lo
+  revisa en menos de un segundo. Pasos en [docs/guia_tiempo_real_gmail.md](docs/guia_tiempo_real_gmail.md).
 
 ### Producción
 

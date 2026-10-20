@@ -7,6 +7,7 @@ from fastapi import APIRouter, Query, Request, Response, status
 
 from centinela.adaptadores.entrada.api.dependencias import Actual, Cont, Ctx
 from centinela.adaptadores.entrada.api.esquemas import (
+    AdjuntoPublico,
     AnalisisPublico,
     CasoPublico,
     ComponentesRiesgo,
@@ -21,6 +22,7 @@ from centinela.aplicacion.casos_uso.casos import Decision
 from centinela.aplicacion.puertos import ResumenCaso
 from centinela.dominio.caso import EstadoCaso
 from centinela.dominio.errores import DatoInvalido
+from centinela.dominio.reglas import riesgo_adjunto
 
 MAX_BYTES_EML = 10_000_000
 
@@ -36,6 +38,11 @@ def _caso(r: ResumenCaso) -> dict:
     return dict(id=r.id, estado=r.estado, nivel=r.nivel, probabilidad=r.p_final, resumen=r.resumen, razones=r.razones,
                 buzon=r.buzon_correo, remitente_nombre=r.remitente_nombre, remitente_correo=r.remitente_correo,
                 asunto=r.asunto, recibido_en=r.recibido_en, puede_liberarse=r.estado == EstadoCaso.EN_CUARENTENA.value)
+
+
+def _adjunto(nombre: str, tipo_mime: str, tamano: int, riesgo) -> AdjuntoPublico:
+    return AdjuntoPublico(nombre=nombre, tipo_mime=tipo_mime, tamano_bytes=tamano, peligroso=riesgo is not None,
+                          motivo=riesgo[1] if riesgo else None)
 
 
 @analisis.post("", response_model=AnalisisPublico, openapi_extra={
@@ -55,7 +62,9 @@ async def analizar_correo(request: Request, yo: Actual, c: Cont, ctx: Ctx) -> An
         razones=[_razon(x) for x in v.razones_visibles], todas_las_razones=[_razon(x) for x in v.razones],
         senales_positivas=r.positivas,
         componentes=ComponentesRiesgo(contenido=v.p_contenido, enlaces=v.p_enlaces, tecnico=v.p_tecnico),
-        enlaces=[EnlacePublico(dominio=e.dominio, probabilidad=e.probabilidad, enganoso=e.enganoso) for e in r.enlaces],
+        enlaces=[EnlacePublico(dominio=e.dominio, probabilidad=e.probabilidad, enganoso=e.enganoso, origen=e.origen)
+                 for e in r.enlaces],
+        adjuntos=[_adjunto(a.nombre, a.tipo_mime, a.tamano_bytes, riesgo_adjunto(a)) for a in correo.adjuntos],
         tiempo_ms=v.tiempo_ms, modelo_contenido_id=r.modelo_contenido_id, modelo_enlaces_id=r.modelo_enlaces_id)
 
 
@@ -71,8 +80,10 @@ def ver(caso_id: int, yo: Actual, c: Cont) -> DetalleCasoPublico:
     return DetalleCasoPublico(
         **_caso(d.resumen), spf=d.spf, dkim=d.dkim, dmarc=d.dmarc,
         todas_las_razones=[_razon(x) for x in d.todas_las_razones],
-        enlaces=[EnlacePublico(dominio=e.dominio, probabilidad=e.probabilidad, enganoso=e.enganoso) for e in d.enlaces],
-        adjuntos=[a.nombre for a in d.adjuntos],
+        enlaces=[EnlacePublico(dominio=e.dominio, probabilidad=e.probabilidad, enganoso=e.enganoso, origen=e.origen)
+                 for e in d.enlaces],
+        adjuntos=[AdjuntoPublico(nombre=a.nombre, tipo_mime=a.tipo_mime, tamano_bytes=a.tamano_bytes, peligroso=a.peligroso,
+                                 motivo=a.motivo) for a in d.adjuntos],
         historial=[EventoPublico(tipo=e.tipo, fecha=e.creado_en, autor=e.autor, detalle=e.detalle) for e in d.eventos])
 
 

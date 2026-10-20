@@ -6,7 +6,7 @@ import hashlib
 from datetime import datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select, true, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -36,6 +36,7 @@ from centinela.aplicacion.puertos import (
     EnlaceGuardado,
     EstadisticasPanel,
     EventoGuardado,
+    FilaBuzonReporte,
     ModeloRegistrado,
     ResultadoAnalisis,
     ResumenCaso,
@@ -129,7 +130,7 @@ class RepoAnalisisSql:
                                             url_sha256=hashlib.sha256(e.url.encode()).hexdigest(),
                                             probabilidad=_dec(e.probabilidad), nivel=_nivel_de(e.probabilidad),
                                             es_acortador=e.dominio in ACORTADORES, enganoso=e.enganoso,
-                                            dominio_texto_visible=e.dominio_visible)
+                                            dominio_texto_visible=e.dominio_visible, origen=e.origen)
                         for e in r.enlaces)
         self._s.flush()
         return fila.id
@@ -208,14 +209,24 @@ class RepoCasosSql:
         razones = self._razones([v.id for *_, v in filas], solo_visibles=True)
         return [self._resumen(c, m, g, v, razones.get(v.id, [])) for c, m, g, v in filas]
 
+    def del_periodo(self, usuario_id: int, desde: datetime, hasta: datetime, limite: int) -> list[ResumenCaso]:
+        q = (self._consulta_resumen().where(BuzonFila.usuario_id == usuario_id, MensajeAnalizadoFila.recibido_en >= desde,
+                                            MensajeAnalizadoFila.recibido_en < hasta)
+             .order_by(MensajeAnalizadoFila.recibido_en.desc()).limit(limite))
+        filas = self._s.execute(q).all()
+        razones = self._razones([v.id for *_, v in filas], solo_visibles=True)
+        return [self._resumen(c, m, g, v, razones.get(v.id, [])) for c, m, g, v in filas]
+
     def detalle(self, caso_id: int) -> DetalleCaso | None:
         fila = self._s.execute(self._consulta_resumen().where(CasoFila.id == caso_id)).first()
         if fila is None:
             return None
         caso, mensaje, correo_gmail, veredicto = fila
         razones = self._razones([veredicto.id], solo_visibles=False).get(veredicto.id, [])
-        enlaces = self._s.scalars(select(EnlaceAnalizadoFila).where(EnlaceAnalizadoFila.veredicto_id == veredicto.id))
-        adjuntos = self._s.scalars(select(AdjuntoAnalizadoFila).where(AdjuntoAnalizadoFila.mensaje_id == mensaje.id))
+        enlaces = self._s.scalars(select(EnlaceAnalizadoFila).where(EnlaceAnalizadoFila.veredicto_id == veredicto.id)
+                                  .order_by(EnlaceAnalizadoFila.id))
+        adjuntos = self._s.scalars(select(AdjuntoAnalizadoFila).where(AdjuntoAnalizadoFila.mensaje_id == mensaje.id)
+                                   .order_by(AdjuntoAnalizadoFila.id))
         eventos = self._s.execute(select(EventoCasoFila, UsuarioFila.nombre)
                                   .outerjoin(UsuarioFila, UsuarioFila.id == EventoCasoFila.autor_id)
                                   .where(EventoCasoFila.caso_id == caso_id).order_by(EventoCasoFila.creado_en, EventoCasoFila.id))
@@ -223,8 +234,8 @@ class RepoCasosSql:
             resumen=self._resumen(caso, mensaje, correo_gmail, veredicto, razones),
             spf=mensaje.spf, dkim=mensaje.dkim, dmarc=mensaje.dmarc,
             todas_las_razones=[Razon(Area(r.area), Gravedad(r.gravedad), r.texto, _f(r.aporte), r.entidad_id) for r in razones],
-            enlaces=[EnlaceGuardado(e.dominio, _f(e.probabilidad), e.enganoso) for e in enlaces],
-            adjuntos=[AdjuntoGuardado(a.nombre, a.tipo_mime, a.tamano_bytes) for a in adjuntos],
+            enlaces=[EnlaceGuardado(e.dominio, _f(e.probabilidad), e.enganoso, e.origen) for e in enlaces],
+            adjuntos=[AdjuntoGuardado(a.nombre, a.tipo_mime, a.tamano_bytes, a.peligroso, a.motivo) for a in adjuntos],
             eventos=[EventoGuardado(e.tipo, e.creado_en, nombre or ("Centinela" if e.autor_id is None else None), e.detalle)
                      for e, nombre in eventos])
 
@@ -302,9 +313,15 @@ class RepoEstadisticasSql:
     def __init__(self, s: Session):
         self._s = s
 
-    def panel(self, usuario_id: int, desde: datetime, zona: str) -> EstadisticasPanel:
-        buzones = select(BuzonFila.id).where(BuzonFila.usuario_id == usuario_id).scalar_subquery()
-        propios = MensajeAnalizadoFila.buzon_id.in_(buzones)
+    @staticmethod
+    def _propios(usuario_id: int | None):
+        if usuario_id is None:
+            return true()
+        return MensajeAnalizadoFila.buzon_id.in_(select(BuzonFila.id).where(BuzonFila.usuario_id == usuario_id)
+                                                 .scalar_subquery())
+
+    def panel(self, usuario_id: int | None, desde: datetime, zona: str) -> EstadisticasPanel:
+        propios = self._propios(usuario_id)
         vigente = (VeredictoFila.mensaje_id == MensajeAnalizadoFila.id) & VeredictoFila.vigente.is_(True)
         dia = func.date(func.timezone(zona, MensajeAnalizadoFila.recibido_en))
 
@@ -340,3 +357,39 @@ class RepoEstadisticasSql:
             casos_por_estado={e.value: casos.get(e.value, 0) for e in EstadoCaso},
             entidades_suplantadas=[(nombre, n) for nombre, n in entidades],
             serie=[DiaPanel(f, c["revisados"], c["medio"], c["alto"]) for f, c in sorted(por_dia.items())])
+
+    def indicadores(self, usuario_id: int | None, desde: datetime) -> dict[str, int]:
+        propios = self._propios(usuario_id)
+        de_riesgo = (VeredictoFila.vigente.is_(True)
+                     & VeredictoFila.nivel.in_([NivelRiesgo.MEDIO.value, NivelRiesgo.ALTO.value]))
+        salida = {a.value: 0 for a in Area}
+        salida.update(dict(self._s.execute(
+            select(RazonFila.area, func.count(func.distinct(VeredictoFila.mensaje_id))).select_from(RazonFila)
+            .join(VeredictoFila, VeredictoFila.id == RazonFila.veredicto_id)
+            .join(MensajeAnalizadoFila, MensajeAnalizadoFila.id == VeredictoFila.mensaje_id)
+            .where(propios, de_riesgo, RazonFila.mostrada.is_(True), MensajeAnalizadoFila.recibido_en >= desde)
+            .group_by(RazonFila.area)).all()))
+        salida["enlaces_qr"] = self._s.scalar(
+            select(func.count()).select_from(EnlaceAnalizadoFila)
+            .join(VeredictoFila, VeredictoFila.id == EnlaceAnalizadoFila.veredicto_id)
+            .join(MensajeAnalizadoFila, MensajeAnalizadoFila.id == VeredictoFila.mensaje_id)
+            .where(propios, VeredictoFila.vigente.is_(True), EnlaceAnalizadoFila.origen == "qr",
+                   MensajeAnalizadoFila.recibido_en >= desde)) or 0
+        salida["adjuntos_peligrosos"] = self._s.scalar(
+            select(func.count()).select_from(AdjuntoAnalizadoFila)
+            .join(MensajeAnalizadoFila, MensajeAnalizadoFila.id == AdjuntoAnalizadoFila.mensaje_id)
+            .where(propios, AdjuntoAnalizadoFila.peligroso.is_(True), MensajeAnalizadoFila.recibido_en >= desde)) or 0
+        return salida
+
+    def por_buzon(self, desde: datetime) -> list[FilaBuzonReporte]:
+        nivel = VeredictoFila.nivel
+        filas = self._s.execute(
+            select(BuzonFila.correo_gmail, BuzonFila.estado, func.count(MensajeAnalizadoFila.id),
+                   func.count(MensajeAnalizadoFila.id).filter(nivel == NivelRiesgo.MEDIO.value),
+                   func.count(MensajeAnalizadoFila.id).filter(nivel == NivelRiesgo.ALTO.value))
+            .select_from(BuzonFila)
+            .outerjoin(MensajeAnalizadoFila, (MensajeAnalizadoFila.buzon_id == BuzonFila.id)
+                       & (MensajeAnalizadoFila.recibido_en >= desde))
+            .outerjoin(VeredictoFila, (VeredictoFila.mensaje_id == MensajeAnalizadoFila.id) & VeredictoFila.vigente.is_(True))
+            .group_by(BuzonFila.id).order_by(BuzonFila.correo_gmail)).all()
+        return [FilaBuzonReporte(c, e, r, m, a) for c, e, r, m, a in filas]

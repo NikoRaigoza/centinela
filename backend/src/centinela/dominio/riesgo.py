@@ -34,6 +34,7 @@ class Area(StrEnum):
     CONTENIDO = "contenido"
     ENLACE = "enlace"
     ADJUNTO = "adjunto"
+    FRAUDE = "fraude"            # pide dinero o datos sin enlaces: suplantación de jefe o proveedor, extorsión
 
 
 class Gravedad(StrEnum):
@@ -136,7 +137,8 @@ def combinar_riesgo(p_contenido: float | None, p_enlaces: float | None, razones_
                     remitente_verificado: bool = False) -> RiesgoCombinado:
     """Combina tres fuentes independientes. Regla documentada en la tesis (criterio experto, no aprendida):
 
-    * técnico = 1 - ∏(1 - peso de cada señal) → varias señales medias suman, sin pasar de 1.
+    * técnico = 1 - ∏(1 - peso de cada señal) → varias señales medias suman, sin pasar de 1. El peso es el que fija
+      su gravedad (0.45 / 0.20 / 0.07), salvo que la regla traiga uno propio (el detector de fraude sin enlaces).
     * final = máximo de (contenido, 0.6·enlaces, técnico) + 0.05 por cada fuente extra que supera 0.5.
     Las razones de CONTENIDO no entran al técnico: el riesgo del texto lo estima el modelo.
     * Si el remitente es un dominio oficial de una entidad del catálogo verificado por DMARC y no hay ninguna
@@ -148,7 +150,7 @@ def combinar_riesgo(p_contenido: float | None, p_enlaces: float | None, razones_
     if tecnicas:
         producto = 1.0
         for r in tecnicas:
-            producto *= 1.0 - PESO_GRAVEDAD[r.gravedad]
+            producto *= 1.0 - (r.aporte if r.aporte is not None else PESO_GRAVEDAD[r.gravedad])
         p_tec = 1.0 - producto
     componentes = [p for p in (p_contenido, PESO_ENLACES * p_enlaces if p_enlaces is not None else None, p_tec)
                    if p is not None]

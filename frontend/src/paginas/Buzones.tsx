@@ -1,7 +1,7 @@
 // Buzones de Gmail del usuario: conectar (OAuth2), elegir qué hace Centinela, pausar, revisar ya y desconectar.
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Mail, Pause, Play, Plus, RefreshCw, Unplug } from "lucide-react";
+import { Mail, Pause, Play, Plus, RefreshCw, Unplug, Zap } from "lucide-react";
 import { useState } from "react";
 import { ErrorApi, mensajeDeError } from "../api/cliente";
 import { buzones } from "../api/servicios";
@@ -85,6 +85,11 @@ function TarjetaBuzon({ b }: { b: Buzon }) {
           <Mail size={20} color="var(--primario)" />
           <h2 style={{ overflowWrap: "anywhere" }}>{b.correo_gmail}</h2>
           <span className={`insignia ${TONO_BUZON[b.estado]}`}><span className="punto" />{ESTADO_BUZON[b.estado]}</span>
+          {b.tiempo_real && b.estado === "activo" && (
+            <span className="insignia info" title="Gmail avisa a Centinela apenas llega un correo: se revisa en segundos">
+              <Zap size={12} aria-hidden /> Tiempo real
+            </span>
+          )}
         </div>
         {!desconectado && (
           <div className="fila">
@@ -106,6 +111,7 @@ function TarjetaBuzon({ b }: { b: Buzon }) {
         <>
           <p className="muy-tenue">
             Conectado el {formatoFechaHora(b.conectado_en)} · última revisión {haceCuanto(b.ultima_revision_en)}
+            {b.estado === "activo" && (b.tiempo_real ? " · revisa cada correo apenas llega" : " · revisa cada 30 segundos")}
           </p>
           <div className="rejilla rejilla-2">
             <fieldset className="pila" style={{ border: 0, padding: 0, margin: 0, gap: 8 }}>

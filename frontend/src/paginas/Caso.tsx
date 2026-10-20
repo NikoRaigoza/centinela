@@ -1,12 +1,13 @@
 // Detalle de un correo de riesgo: por qué es peligroso, evidencia técnica, historial y decisiones del dueño.
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Bot, Inbox, Paperclip, RotateCcw, ShieldAlert, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Bot, Inbox, RotateCcw, ShieldAlert, ShieldCheck } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router";
 import { mensajeDeError } from "../api/cliente";
 import { casos } from "../api/servicios";
 import type { Decision, DetalleCaso, Nivel } from "../api/tipos";
+import { ListaAdjuntos, OrigenDelEnlace } from "../componentes/Adjuntos";
 import { DialogoConfirmar } from "../componentes/Dialogo";
 import { useTostadas } from "../componentes/Tostadas";
 import { ChipAutenticacion, ErrorCarga, Esqueleto, InsigniaEstado, InsigniaNivel } from "../componentes/ui";
@@ -187,10 +188,13 @@ export function PaginaCaso() {
               <ChipAutenticacion nombre="DKIM" resultado={c.dkim} />
               <ChipAutenticacion nombre="DMARC" resultado={c.dmarc} />
             </dd>
-            {c.adjuntos.length > 0 && (<><dt>Adjuntos</dt><dd className="pila" style={{ gap: 4 }}>
-              {c.adjuntos.map((a) => <span key={a} className="fila" style={{ gap: 6 }}><Paperclip size={14} />{a}</span>)}
-            </dd></>)}
           </dl>
+          {c.adjuntos.length > 0 && (
+            <>
+              <h3 style={{ margin: "18px 0 10px" }}>Adjuntos ({c.adjuntos.length})</h3>
+              <ListaAdjuntos adjuntos={c.adjuntos} />
+            </>
+          )}
           {c.enlaces.length > 0 && (
             <>
               <h3 style={{ margin: "18px 0 10px" }}>Enlaces ({c.enlaces.length})</h3>
@@ -200,6 +204,7 @@ export function PaginaCaso() {
                     <div className="fila" style={{ gap: 8 }}>
                       <span className="mono" style={{ overflowWrap: "anywhere" }}>{e.dominio}</span>
                       {e.enganoso && <span className="insignia alto">Engañoso</span>}
+                      <OrigenDelEnlace enlace={e} />
                     </div>
                     {e.probabilidad != null && (
                       <div className="barra-prob sin-rotulo">

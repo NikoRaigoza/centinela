@@ -51,6 +51,7 @@ class Almacen:
     auditoria: list[EventoAuditoria] = field(default_factory=list)
     buzones: dict[int, Any] = field(default_factory=dict)
     mensajes: dict[tuple[int, str], Any] = field(default_factory=dict)
+    revision_solicitada: set[int] = field(default_factory=set)
 
 
 class _RepoUsuarios:
@@ -188,12 +189,25 @@ class _RepoBuzones:
     def guardar(self, b):
         self.a.buzones[b.id] = copy.deepcopy(b)
 
-    def reclamar_pendientes(self, antes_de, ahora, limite):
-        ids = [b.id for b in self.a.buzones.values() if b.estado.value == "activo"
-               and (b.ultima_revision_en is None or b.ultima_revision_en < antes_de)][:limite]
+    def reclamar_pendientes(self, antes_de, ahora, limite, respaldo_antes_de=None):
+        def toca(b):
+            if b.id in self.a.revision_solicitada or b.ultima_revision_en is None:
+                return True
+            vigilado = b.vigilancia_expira_en is not None and b.vigilancia_expira_en > ahora
+            return b.ultima_revision_en < ((respaldo_antes_de or antes_de) if vigilado else antes_de)
+
+        ids = [b.id for b in self.a.buzones.values() if b.estado.value == "activo" and toca(b)][:limite]
         for i in ids:
             self.a.buzones[i].ultima_revision_en = ahora
+            self.a.revision_solicitada.discard(i)
         return ids
+
+    def solicitar_revision(self, buzon_id, ahora):
+        self.a.revision_solicitada.add(buzon_id)
+
+    def por_vigilar(self, renovar_antes_de, limite):
+        return [copy.deepcopy(b) for b in self.a.buzones.values() if b.revisable
+                and (b.vigilancia_expira_en is None or b.vigilancia_expira_en < renovar_antes_de)][:limite]
 
 
 class _RepoMensajes:
@@ -212,4 +226,8 @@ class _RepoMensajes:
 
     def recientes(self, buzon_id, limite):
         return [m for (b, _), m in self.a.mensajes.items() if b == buzon_id][:limite]
+
+    def remitente_conocido(self, buzon_id, remitente_correo):
+        return any(b == buzon_id and m.correo and m.correo.remitente_correo == remitente_correo.lower()
+                   for (b, _), m in self.a.mensajes.items())
 

@@ -6,7 +6,9 @@ export type Nivel = "bajo" | "medio" | "alto";
 export type EstadoCaso = "nuevo" | "en_cuarentena" | "liberado" | "confirmado" | "falso_positivo";
 export type EstadoBuzon = "activo" | "pausado" | "revocado" | "error";
 export type ModoCuarentena = "solo_avisar" | "cuarentena_automatica";
-export type Area = "remitente" | "autenticacion" | "suplantacion" | "contenido" | "enlace" | "adjunto";
+export type Area = "remitente" | "autenticacion" | "suplantacion" | "contenido" | "enlace" | "adjunto" | "fraude";
+export type OrigenEnlace = "cuerpo" | "qr" | "adjunto";
+export type FormatoReporte = "pdf" | "xlsx";
 export type Gravedad = "baja" | "media" | "alta";
 export type AccionCuenta = "aprobar" | "rechazar" | "desactivar" | "reactivar";
 export type Decision = "confirmar" | "falso_positivo" | "reabrir";
@@ -55,6 +57,8 @@ export interface Buzon {
   ultima_revision_en: string | null;
   ultimo_error: string | null;
   conectado_en: string;
+  /** Gmail avisa al instante de los correos nuevos (Pub/Sub); si no, se revisa cada ~30 s. */
+  tiempo_real: boolean;
 }
 
 export interface ResumenRevision {
@@ -90,6 +94,16 @@ export interface Enlace {
   dominio: string;
   probabilidad: number | null;
   enganoso?: boolean;
+  /** De dónde salió: el texto del correo, un código QR de una imagen o un adjunto (PDF, página web). */
+  origen?: OrigenEnlace;
+}
+
+export interface Adjunto {
+  nombre: string;
+  tipo_mime: string | null;
+  tamano_bytes: number | null;
+  peligroso: boolean;
+  motivo: string | null;
 }
 
 export interface Analisis {
@@ -104,6 +118,7 @@ export interface Analisis {
   senales_positivas: string[];
   componentes: { contenido: number | null; enlaces: number | null; tecnico: number | null };
   enlaces: Enlace[];
+  adjuntos: Adjunto[];
   tiempo_ms: number | null;
   modelo_contenido_id: number | null;
   modelo_enlaces_id: number | null;
@@ -140,7 +155,7 @@ export interface DetalleCaso extends Caso {
   dmarc: ResultadoAuth | null;
   todas_las_razones: Razon[];
   enlaces: Enlace[];
-  adjuntos: string[];
+  adjuntos: Adjunto[];
   historial: Evento[];
 }
 

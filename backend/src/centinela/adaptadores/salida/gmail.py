@@ -23,6 +23,7 @@ from centinela.aplicacion.puertos import (
     PerfilBuzon,
     PermisoInsuficiente,
     Reloj,
+    Vigilancia,
 )
 from centinela.dominio.buzon import EtiquetasCentinela
 
@@ -114,7 +115,7 @@ class ProveedorGmail:
         self._cache[llave] = (datos["access_token"], ahora + timedelta(seconds=int(datos.get("expires_in", 3600))))
         return datos["access_token"]
 
-    def solicitar(self, refresh_token: str, metodo: str, ruta: str, **kw) -> httpx.Response:
+    def solicitar(self, refresh_token: str, metodo: str, ruta: str, *, revisar_403: bool = True, **kw) -> httpx.Response:
         for intento in range(2):
             token = self.token_acceso(refresh_token, forzar=intento > 0)
             try:
@@ -125,7 +126,7 @@ class ProveedorGmail:
                 break
         if r.status_code == 401:
             raise AccesoCorreoRevocado()
-        if r.status_code == 403:
+        if r.status_code == 403 and revisar_403:
             razon = ""
             try:
                 razon = r.json()["error"]["errors"][0]["reason"]
@@ -224,3 +225,20 @@ class ClienteGmail:
         raw = base64.urlsafe_b64encode(crudo).decode()
         return self._json("POST", "/messages", params={"internalDateSource": "dateHeader"},
                           json={"raw": raw, "labelIds": etiquetas})["id"]
+
+    def vigilar(self, tema: str) -> Vigilancia:
+        """users.watch: Gmail publicará en el tema de Pub/Sub cada cambio en la bandeja de entrada durante ~7 días.
+        Para que funcione, la cuenta gmail-api-push@system.gserviceaccount.com debe poder publicar en el tema."""
+        # Un 403 aquí suele ser del tema de Pub/Sub (sin permiso para publicar), no del buzón: no se toma como revocado
+        r = self._p.solicitar(self._token, "POST", "/watch", revisar_403=False,
+                              json={"topicName": tema, "labelIds": ["INBOX"], "labelFilterBehavior": "INCLUDE"})
+        if r.status_code >= 400:
+            detalle = ""
+            try:
+                detalle = r.json()["error"]["message"][:200]
+            except (ValueError, KeyError, TypeError):
+                pass
+            raise ErrorProveedorCorreo(f"Gmail no activó los avisos en tiempo real (HTTP {r.status_code}). {detalle}".strip())
+        d = r.json()
+        return Vigilancia(history_id=int(d["historyId"]),
+                          expira_en=datetime.fromtimestamp(int(d["expiration"]) / 1000, UTC))

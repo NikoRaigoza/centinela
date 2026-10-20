@@ -121,6 +121,10 @@ def test_modo_local_responde_sobre_el_caso_y_sobre_el_panel():
     assert "Conectar Gmail" in responder_local("cómo conecto mi gmail", None)
     assert "Mi cuenta" in responder_local("quiero notificaciones en el celular", None)
     assert "No entendí" in responder_local("asdfgh", None)
+    assert "tarjetas de regalo" in responder_local("Mi jefe me pide comprar tarjetas de regalo, ¿qué hago?", None)
+    assert "código QR" in responder_local("¿Es peligroso escanear un QR de un correo?", None)
+    assert "Reportes" in responder_local("¿Cómo descargo un reporte en Excel?", None)
+    assert "No abras" in responder_local("¿Qué hago?", None)
 
 
 def _gemini(respuestas: list[httpx.Response]) -> tuple[AsistenteGemini, list[httpx.Request]]:

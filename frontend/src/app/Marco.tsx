@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Bot,
   BrainCircuit,
+  FileChartColumn,
   FileSearch,
   Gauge,
   Inbox,
@@ -57,6 +58,7 @@ export function Marco() {
           <Enlace a="/buzones" icono={<Inbox size={18} aria-hidden />}>Mis buzones</Enlace>
           <Enlace a="/analizar" icono={<FileSearch size={18} aria-hidden />}>Analizar un correo</Enlace>
           <Enlace a="/asistente" icono={<Bot size={18} aria-hidden />}>Asistente</Enlace>
+          <Enlace a="/reportes" icono={<FileChartColumn size={18} aria-hidden />}>Reportes</Enlace>
           <Enlace a="/cuenta" icono={<UserCog size={18} aria-hidden />}>Mi cuenta</Enlace>
           {esAdmin && (
             <>

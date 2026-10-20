@@ -32,10 +32,33 @@ class Autenticacion:
     confiable: bool = False      # True si la puso el servidor de Google y no el remitente
 
 
+class OrigenEnlace(StrEnum):
+    CUERPO = "cuerpo"
+    QR = "qr"                # leído de un código QR en una imagen del correo
+    ADJUNTO = "adjunto"      # dentro de un PDF o una página HTML adjunta
+
+
 @dataclass(frozen=True)
 class Enlace:
     url: str
     texto_visible: str = ""
+    origen: OrigenEnlace = OrigenEnlace.CUERPO
+    fuente: str | None = None        # nombre del adjunto o imagen de donde salió (QR o adjunto)
+
+
+class SenalAdjunto(StrEnum):
+    """Lo que se descubre al mirar el CONTENIDO del adjunto (no solo su nombre)."""
+    EJECUTABLE = "ejecutable"                       # por dentro es un programa (Windows, Linux, Mac o Java)
+    DISFRAZADO = "disfrazado"                       # su extensión dice una cosa y su contenido es otra
+    MACROS = "macros"                               # documento de Office con macros (código VBA)
+    PLANTILLA_REMOTA = "plantilla_remota"           # documento de Word que descarga una plantilla de internet
+    COMPRIMIDO_PELIGROSO = "comprimido_peligroso"   # un .zip que trae programas o scripts adentro
+    CIFRADO = "cifrado"                             # comprimido con clave: los antivirus no lo pueden revisar
+    PDF_JAVASCRIPT = "pdf_javascript"               # PDF con código o con orden de abrir programas
+    PDF_ARCHIVO_OCULTO = "pdf_archivo_oculto"       # PDF con archivos incrustados
+    FORMULARIO = "formulario"                       # página HTML/SVG que pide usuario y contraseña
+    SCRIPT = "script"                               # imagen SVG o página con código que se ejecuta al abrirla
+    CODIGO_QR = "codigo_qr"                         # imagen con un código QR
 
 
 @dataclass(frozen=True)
@@ -44,6 +67,9 @@ class Adjunto:
     tipo_mime: str
     tamano_bytes: int
     sha256: str | None = None
+    tipo_real: str | None = None                    # tipo según su contenido: "pdf", "ejecutable", "html", ...
+    senales: tuple[SenalAdjunto, ...] = ()
+    contenido: tuple[str, ...] = ()                 # nombres de los archivos que trae, si es comprimido
 
     @property
     def extension(self) -> str | None:
