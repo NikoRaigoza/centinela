@@ -42,7 +42,7 @@ def test_correo_se_normaliza_y_valida():
 
 
 def test_bloqueo_tras_intentos_fallidos():
-    u = Usuario.solicitar("ana@gmail.com", "Ana", "x")
+    u = Usuario.solicitar("ana@gmail.com", "Ana", "x", True, datetime(2026, 10, 20, tzinfo=UTC))
     assert not any(u.registrar_fallo(T0, 3, 15) for _ in range(2))
     assert u.registrar_fallo(T0, 3, 15) is True
     assert u.esta_bloqueado(T0 + timedelta(minutes=14))
@@ -52,7 +52,7 @@ def test_bloqueo_tras_intentos_fallidos():
 
 
 def test_ciclo_de_vida_de_la_cuenta():
-    u = Usuario.solicitar("ana@gmail.com", "Ana", "x")
+    u = Usuario.solicitar("ana@gmail.com", "Ana", "x", True, datetime(2026, 10, 20, tzinfo=UTC))
     u.id = 2
     with pytest.raises(AccesoDenegado):
         u.verificar_puede_ingresar()
@@ -67,7 +67,7 @@ def test_ciclo_de_vida_de_la_cuenta():
 
 
 def test_solo_un_admin_cambia_cuentas_y_no_la_propia():
-    u = Usuario.solicitar("ana@gmail.com", "Ana", "x")
+    u = Usuario.solicitar("ana@gmail.com", "Ana", "x", True, datetime(2026, 10, 20, tzinfo=UTC))
     u.id = 2
     otro = Usuario(id=3, correo="b@b.co", nombre="Bb", clave_hash="x", estado=EstadoCuenta.ACTIVO)
     with pytest.raises(AccesoDenegado):

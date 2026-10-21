@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import and_, or_, select, text, update
+from sqlalchemy import and_, delete, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -15,6 +15,7 @@ from centinela.adaptadores.salida.postgres.tablas import (
     CodigoRecuperacionFila,
     ConfiguracionFila,
     MensajeAnalizadoFila,
+    RetroalimentacionFila,
     SesionFila,
     UsuarioFila,
 )
@@ -28,7 +29,8 @@ from centinela.dominio.usuario import EstadoCuenta, Rol, Usuario
 CANAL_REVISION = "centinela_revision"      # canal LISTEN/NOTIFY con el que la API despierta al worker
 
 _CAMPOS_USUARIO = ("correo", "nombre", "clave_hash", "totp_secreto_cifrado", "totp_activo", "totp_ultimo_paso",
-                   "intentos_fallidos", "bloqueado_hasta", "aprobado_por", "aprobado_en", "ultimo_acceso")
+                   "intentos_fallidos", "bloqueado_hasta", "aprobado_por", "aprobado_en", "ultimo_acceso",
+                   "consentimiento_version", "consentimiento_en", "debe_cambiar_clave")
 
 
 def _a_usuario(f: UsuarioFila) -> Usuario:
@@ -72,6 +74,20 @@ class RepoUsuariosSql:
         if estado is not None:
             q = q.where(UsuarioFila.estado == estado.value)
         return [_a_usuario(f) for f in self._s.scalars(q)]
+
+    def administradores_activos(self) -> int:
+        return self._s.scalar(select(func.count()).select_from(UsuarioFila).where(
+            UsuarioFila.rol == Rol.ADMINISTRADOR.value, UsuarioFila.estado == EstadoCuenta.ACTIVO.value)) or 0
+
+    def eliminar(self, usuario_id: int) -> None:
+        """Borra a la persona y TODO lo suyo: buzones (y con ellos mensajes, análisis, casos y avisos), sesiones,
+        códigos, dispositivos push, conversaciones y retroalimentación. La bitácora de auditoría se conserva (es
+        inmutable y solo guarda el número de usuario, no sus datos)."""
+        self._s.execute(delete(BuzonFila).where(BuzonFila.usuario_id == usuario_id))
+        self._s.execute(update(RetroalimentacionFila).where(RetroalimentacionFila.validada_por == usuario_id)
+                        .values(validada_por=None))
+        self._s.execute(delete(UsuarioFila).where(UsuarioFila.id == usuario_id))
+        self._s.flush()
 
 
 def _a_sesion(f: SesionFila) -> Sesion:

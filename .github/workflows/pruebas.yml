@@ -1,0 +1,88 @@
+# Integración continua: en cada cambio corre el linter, todas las pruebas (con PostgreSQL real) y construye la imagen.
+name: Pruebas
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pruebas-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (Python + PostgreSQL)
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      # Credenciales solo de esta base desechable de CI
+      CENTINELA_BD_URL_PRUEBAS: postgresql+psycopg://centinela_app:app_ci@localhost:5432/centinela_pruebas
+      CENTINELA_BD_URL_PRUEBAS_MIGRACIONES: postgresql+psycopg://centinela_owner:owner_ci@localhost:5432/centinela_pruebas
+      CENTINELA_JWT_SECRETO: secreto-solo-para-las-pruebas-de-integracion-continua
+      CENTINELA_LLAVE_CIFRADO: q1oJ7mFsZ0F5n2Qk4vHq8cX6b9Wl3tYz-uDx0rPaEiM=
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.23"
+      - name: Crear roles y bases de datos
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -v clave_owner=owner_ci -v clave_app=app_ci -f scripts/crear_bd.sql
+      - name: Instalar dependencias
+        run: uv sync --frozen
+      - name: Linter
+        run: uv run ruff check src tests migraciones
+      - name: Pruebas
+        run: uv run pytest -q
+      - name: Dependencias sin vulnerabilidades conocidas
+        run: |
+          uv export --no-dev --no-hashes --format requirements-txt -o /tmp/req.txt -q
+          uvx pip-audit -r /tmp/req.txt --progress-spinner off
+
+  panel:
+    name: Panel (React)
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npx tsc --noEmit
+      - run: npx vitest run
+      - run: npm run build
+      - run: npm audit --omit=dev
+
+  imagen:
+    name: Imagen de Docker
+    runs-on: ubuntu-24.04
+    needs: [backend, panel]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Construir la imagen de producción
+        run: docker build -t centinela:ci .
+      - name: La imagen arranca y responde
+        run: |
+          docker run --rm centinela:ci centinela --help > /dev/null
+          docker run --rm centinela:ci python -c "import centinela.contenedor, zxingcpp, reportlab, openpyxl, xgboost"

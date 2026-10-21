@@ -25,7 +25,9 @@ frontend/           Panel web (React + TypeScript + Vite)
 ml/                 Entrenamiento y evaluación de los modelos (ver ml/README.md)
 docs/               Diseño del modelo de datos y guías de Gmail (conexión y tiempo real)
 legacy/             Prototipo original en Streamlit (solo referencia)
-docker-compose.yml  Base de datos PostgreSQL en contenedor
+docker-compose.yml  Base de datos PostgreSQL en contenedor (desarrollo)
+docker-compose.prod.yml + Dockerfile + despliegue/   Producción: Caddy, API, worker, PostgreSQL y respaldos
+.github/workflows/  Integración continua: pruebas, linter, auditoría de dependencias e imagen
 ```
 
 ## Puesta en marcha (desarrollo)
@@ -90,6 +92,9 @@ cd frontend && npm test
   revisa en menos de un segundo. Pasos en [docs/guia_tiempo_real_gmail.md](docs/guia_tiempo_real_gmail.md).
 
 ### Producción
+
+Despliegue completo (Docker Compose con HTTPS automático, respaldos cifrados y costo cero en Azure for Students):
+**[despliegue/README.md](despliegue/README.md)**. Plan y estado: [docs/plan_produccion.md](docs/plan_produccion.md).
 
 `cd frontend && npm run build` genera `frontend/dist/`. Si esa carpeta existe, la API también sirve el panel
 (`CENTINELA_DIR_PANEL` permite cambiar la ruta), así que basta un proceso: `uv run centinela api` detrás de HTTPS

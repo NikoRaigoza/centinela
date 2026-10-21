@@ -25,7 +25,7 @@ def s():
     h = HasherFalso()
     adm = a.CrearAdministrador(x.uow, x.reloj, h).ejecutar("admin@centinela.co", "Admin", CLAVE)
     for correo_u in ("ana@gmail.com", "luis@gmail.com"):
-        a.SolicitarRegistro(x.uow, x.reloj, h).ejecutar(correo_u, "Persona", CLAVE)
+        a.SolicitarRegistro(x.uow, x.reloj, h).ejecutar(correo_u, "Persona", CLAVE, True)
     for uid in (2, 3):
         a.CambiarEstadoCuenta(x.uow, x.reloj).ejecutar(adm.id, uid, a.AccionCuenta.APROBAR)
     x.iniciar = bz.IniciarConexionGmail(x.uow, x.reloj, x.auth)

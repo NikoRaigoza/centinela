@@ -22,6 +22,7 @@ from centinela.adaptadores.salida.postgres.repositorios_analisis import (
     RepoEntidadesSql,
     RepoEstadisticasSql,
     RepoModelosSql,
+    RepoRetencionSql,
     RepoRetroalimentacionSql,
 )
 from centinela.adaptadores.salida.postgres.repositorios_comunicacion import (
@@ -55,6 +56,7 @@ class UnidadDeTrabajoSql:
         self.estadisticas = RepoEstadisticasSql(self._s)
         self.suscripciones_push = RepoSuscripcionesPushSql(self._s)
         self.conversaciones = RepoConversacionesSql(self._s)
+        self.retencion = RepoRetencionSql(self._s)
         self.auditoria = RegistroAuditoriaSql(self._s)
         return self
 

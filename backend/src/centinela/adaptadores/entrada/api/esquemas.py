@@ -24,17 +24,43 @@ class UsuarioPublico(BaseModel):
     totp_activo: bool
     ultimo_acceso: datetime | None
     creado_en: datetime | None
+    consentimiento_version: str | None = None
+    consentimiento_en: datetime | None = None
+    debe_cambiar_clave: bool = False
 
     @classmethod
     def desde(cls, u: Usuario) -> UsuarioPublico:
         return cls(id=u.id, correo=u.correo, nombre=u.nombre, rol=u.rol.value, estado=u.estado.value,
-                   totp_activo=u.totp_activo, ultimo_acceso=u.ultimo_acceso, creado_en=u.creado_en)
+                   totp_activo=u.totp_activo, ultimo_acceso=u.ultimo_acceso, creado_en=u.creado_en,
+                   consentimiento_version=u.consentimiento_version, consentimiento_en=u.consentimiento_en,
+                   debe_cambiar_clave=u.debe_cambiar_clave)
 
 
 class SolicitudRegistro(BaseModel):
     correo: str = Field(max_length=254)
     nombre: str = Field(max_length=120)
     clave: str = Field(max_length=128)
+    acepta_politica: bool = False      # autorización del tratamiento de datos (Ley 1581): obligatoria
+
+
+class SolicitudClaveNueva(BaseModel):
+    nueva: str = Field(max_length=128)
+
+
+class SolicitudEliminarCuenta(BaseModel):
+    clave: str = Field(max_length=128)
+
+
+class ClaveTemporal(BaseModel):
+    clave_temporal: str
+
+
+class InfoLegal(BaseModel):
+    version_politica: str
+    responsable: str
+    correo_contacto: str | None
+    dias_sin_riesgo: int
+    dias_casos: int
 
 
 class SolicitudInicio(BaseModel):
@@ -63,7 +89,7 @@ class TokenAcceso(BaseModel):
 
 
 class RespuestaInicio(BaseModel):
-    paso: str                                   # completo | verificar_2fa | configurar_2fa
+    paso: str                                   # completo | verificar_2fa | configurar_2fa | cambiar_clave
     acceso: TokenAcceso | None = None
     token_desafio: str | None = None
 

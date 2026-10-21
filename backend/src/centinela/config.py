@@ -54,6 +54,10 @@ class Configuracion(BaseSettings):
     # Panel React compilado (frontend/dist). Si existe, la API también lo sirve: un solo proceso en producción.
     dir_panel: Path | None = Path(__file__).resolve().parents[3] / "frontend" / "dist"
 
+    # Responsable del tratamiento de datos (aparece en la Política de privacidad pública, Ley 1581)
+    responsable_nombre: str = "Proyecto de grado Centinela"
+    responsable_correo: str | None = None
+
     minutos_token_acceso: int = 15
     minutos_desafio_2fa: int = 5
     origenes_cors: list[str] = ["http://localhost:5173"]
@@ -69,6 +73,33 @@ class Configuracion(BaseSettings):
     @property
     def push_configurado(self) -> bool:
         return bool(self.vapid_clave_privada and self.vapid_clave_privada.get_secret_value() and self.vapid_contacto)
+
+    def problemas_produccion(self) -> list[str]:
+        """Lo que impide arrancar con seguridad en producción. Vacío = todo bien."""
+        problemas = []
+        jwt = self.jwt_secreto.get_secret_value()
+        if len(jwt) < 40 or any(x in jwt.lower() for x in ("cambiar", "secreto", "prueba", "xxxx")):
+            problemas.append("CENTINELA_JWT_SECRETO es débil: genera uno con secrets.token_urlsafe(48).")
+        try:
+            from cryptography.fernet import Fernet
+
+            Fernet(self.llave_cifrado.get_secret_value())
+        except (ValueError, TypeError):
+            problemas.append("CENTINELA_LLAVE_CIFRADO no es una llave Fernet válida.")
+        if not self.url_panel.startswith("https://"):
+            problemas.append("CENTINELA_URL_PANEL debe empezar por https://")
+        if self.gmail_configurado and not self.gmail_redirect_uri.startswith(self.url_panel.rstrip("/") + "/"):
+            problemas.append("CENTINELA_GMAIL_REDIRECT_URI debe estar en el mismo dominio que CENTINELA_URL_PANEL.")
+        if any(not o.startswith("https://") for o in self.origenes_cors):
+            problemas.append("CENTINELA_ORIGENES_CORS solo puede tener orígenes https://")
+        for nombre, url in (("CENTINELA_BD_URL", self.bd_url), ("CENTINELA_BD_URL_MIGRACIONES", self.bd_url_migraciones)):
+            if "centinela_app:centinela_app@" in url or "centinela_owner:centinela_owner@" in url or "CAMBIAR" in url:
+                problemas.append(f"{nombre} usa una contraseña de ejemplo.")
+        if not self.responsable_nombre.strip():
+            problemas.append("CENTINELA_RESPONSABLE_NOMBRE es obligatorio: aparece en la Política de privacidad.")
+        if not self.responsable_correo:
+            problemas.append("CENTINELA_RESPONSABLE_CORREO es obligatorio: es el canal de atención de la Ley 1581.")
+        return problemas
 
     @property
     def tiempo_real_configurado(self) -> bool:

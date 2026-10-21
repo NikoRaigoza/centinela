@@ -50,6 +50,10 @@ def desafio_verificar(cred: Credenciales, c: Cont) -> t.Reclamos:
     return _reclamos(cred, c, {t.VERIFICAR_2FA})
 
 
+def desafio_cambiar_clave(cred: Credenciales, c: Cont) -> t.Reclamos:
+    return _reclamos(cred, c, {t.CAMBIAR_CLAVE})
+
+
 def desafio_o_acceso_configurar(cred: Credenciales, c: Cont) -> t.Reclamos:
     """Configurar 2FA: durante el inicio de sesión (admin obligado) o desde Ajustes ya autenticado."""
     return _reclamos(cred, c, {t.CONFIGURAR_2FA, t.ACCESO})

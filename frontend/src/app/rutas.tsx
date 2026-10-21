@@ -10,6 +10,7 @@ import { PaginaCaso } from "../paginas/Caso";
 import { PaginaCasos } from "../paginas/Casos";
 import { PaginaCuenta } from "../paginas/Cuenta";
 import { PaginaIngreso } from "../paginas/Ingreso";
+import { PaginaPrivacidad, PaginaTerminos } from "../paginas/Legal";
 import { PaginaInicio } from "../paginas/Inicio";
 import { PaginaNoEncontrada } from "../paginas/NoEncontrada";
 import { PaginaRegistro } from "../paginas/Registro";
@@ -54,6 +55,9 @@ function SoloAdmin() {
 }
 
 export const rutas: RouteObject[] = [
+  // Públicas, con o sin sesión (Google exige que la política sea accesible sin ingresar)
+  { path: "/privacidad", element: <PaginaPrivacidad /> },
+  { path: "/terminos", element: <PaginaTerminos /> },
   {
     element: <SinSesion />,
     children: [

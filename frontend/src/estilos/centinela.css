@@ -529,3 +529,18 @@ details.plegable[open] > summary { margin-bottom: 12px; }
   .alcance-reporte { grid-template-columns: 1fr; }
   .formato-reporte .boton { justify-self: stretch; }
 }
+
+/* ------------------------------------------------------------------ legal y cuenta */
+.pagina-legal { max-width: 820px; margin: 0 auto; padding: 24px 16px 48px; display: grid; gap: 16px; }
+.texto-legal { display: grid; gap: 10px; line-height: 1.6; }
+.texto-legal h1 { margin: 8px 0 0; }
+.texto-legal h2 { font-size: 1.05rem; margin: 14px 0 0; }
+.texto-legal ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.texto-legal .boton { justify-self: start; }
+.enlaces-legales { margin-top: 20px; text-align: center; font-size: 0.82rem; }
+.casilla.autorizacion { display: flex; gap: 10px; align-items: flex-start; font-size: 0.9rem; margin: 4px 0 12px; }
+.casilla.autorizacion input { margin-top: 3px; accent-color: var(--primario); flex: none; }
+.zona-peligro { border-color: var(--alto-suave); }
+.clave-temporal { gap: 10px; flex-wrap: wrap; }
+.clave-temporal code { font-family: var(--mono); font-size: 1.1rem; padding: 8px 12px; border-radius: var(--radio-sm);
+  background: var(--superficie-2); border: 1px solid var(--borde); user-select: all; }

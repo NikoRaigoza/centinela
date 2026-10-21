@@ -27,7 +27,7 @@ def _bearer(token):
 def _admin_con_2fa(c, cliente):
     """Crea el admin por consola y completa el primer ingreso con configuración de 2FA."""
     c.crear_administrador.ejecutar("admin@centinela.co", "Administración", CLAVE)
-    r = cliente.post("/api/auth/inicio", json={"correo": "admin@centinela.co", "clave": CLAVE}).json()
+    r = cliente.post("/api/auth/inicio", json={"correo": "admin@centinela.co", "clave": CLAVE, "acepta_politica": True}).json()
     assert r["paso"] == "configurar_2fa" and r["acceso"] is None
     desafio = r["token_desafio"]
     conf = cliente.post("/api/auth/2fa/configuracion", headers=_bearer(desafio)).json()
@@ -51,9 +51,10 @@ def test_flujo_completo(entorno):
     token_admin, _ = _admin_con_2fa(c, cliente)
 
     # 1. Un usuario se registra y queda pendiente
-    r = cliente.post("/api/auth/registro", json={"correo": "ana@gmail.com", "nombre": "Ana Pérez", "clave": CLAVE})
+    r = cliente.post("/api/auth/registro", json={"correo": "ana@gmail.com", "nombre": "Ana Pérez", "clave": CLAVE,
+                                                 "acepta_politica": True})
     assert r.status_code == 202
-    r = cliente.post("/api/auth/inicio", json={"correo": "ana@gmail.com", "clave": CLAVE})
+    r = cliente.post("/api/auth/inicio", json={"correo": "ana@gmail.com", "clave": CLAVE, "acepta_politica": True})
     assert r.status_code == 403 and "revisión" in r.json()["mensaje"]
 
     # 2. El administrador lo aprueba (un usuario normal no puede ver esta ruta)
@@ -63,7 +64,7 @@ def test_flujo_completo(entorno):
     assert r.json()["estado"] == "activo"
 
     # 3. El usuario ingresa: token de acceso en el cuerpo, renovación en cookie httpOnly
-    r = cliente.post("/api/auth/inicio", json={"correo": "ana@gmail.com", "clave": CLAVE})
+    r = cliente.post("/api/auth/inicio", json={"correo": "ana@gmail.com", "clave": CLAVE, "acepta_politica": True})
     cuerpo = r.json()
     assert cuerpo["paso"] == "completo"
     assert "httponly" in r.headers["set-cookie"].lower() and "samesite=strict" in r.headers["set-cookie"].lower()
@@ -88,7 +89,7 @@ def test_flujo_completo(entorno):
 def test_admin_ingresa_con_segundo_factor(entorno):
     c, cliente = entorno
     _, totp = _admin_con_2fa(c, cliente)
-    r = cliente.post("/api/auth/inicio", json={"correo": "admin@centinela.co", "clave": CLAVE}).json()
+    r = cliente.post("/api/auth/inicio", json={"correo": "admin@centinela.co", "clave": CLAVE, "acepta_politica": True}).json()
     assert r["paso"] == "verificar_2fa"
     malo = cliente.post("/api/auth/2fa/verificacion", headers=_bearer(r["token_desafio"]), json={"codigo": "000000"})
     assert malo.status_code == 401
@@ -101,17 +102,18 @@ def test_admin_ingresa_con_segundo_factor(entorno):
 
 def test_bloqueo_por_intentos(entorno):
     c, cliente = entorno
-    cliente.post("/api/auth/registro", json={"correo": "luis@gmail.com", "nombre": "Luis", "clave": CLAVE})
+    cliente.post("/api/auth/registro", json={"correo": "luis@gmail.com", "nombre": "Luis", "clave": CLAVE,
+                                             "acepta_politica": True})
     estados = [cliente.post("/api/auth/inicio", json={"correo": "luis@gmail.com", "clave": "Mala-clave-2026"}).status_code
                for _ in range(5)]
     assert estados == [401, 401, 401, 401, 423]
-    r = cliente.post("/api/auth/inicio", json={"correo": "luis@gmail.com", "clave": CLAVE})
+    r = cliente.post("/api/auth/inicio", json={"correo": "luis@gmail.com", "clave": CLAVE, "acepta_politica": True})
     assert r.status_code == 423 and "minuto" in r.json()["mensaje"]
 
 
 def test_errores_en_espanol(entorno):
     _, cliente = entorno
-    r = cliente.post("/api/auth/registro", json={"correo": "x@y.co", "nombre": "Xy", "clave": "corta"})
+    r = cliente.post("/api/auth/registro", json={"correo": "x@y.co", "nombre": "Xy", "clave": "corta", "acepta_politica": True})
     assert r.status_code == 422 and r.json()["mensaje"].startswith("La contraseña")
     r = cliente.post("/api/auth/inicio", json={"correo": "x@y.co"})
     assert r.status_code == 422 and "clave" in r.json()["mensaje"]

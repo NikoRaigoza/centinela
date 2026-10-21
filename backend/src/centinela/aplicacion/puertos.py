@@ -241,6 +241,10 @@ class RepoUsuarios(Protocol):
     def agregar(self, usuario: Usuario) -> Usuario: ...
     def guardar(self, usuario: Usuario) -> None: ...
     def listar(self, estado: EstadoCuenta | None = None) -> list[Usuario]: ...
+    def administradores_activos(self) -> int: ...
+    def eliminar(self, usuario_id: int) -> None:
+        """Borra a la persona con todos sus datos (buzones, casos, sesiones...). La auditoría se conserva."""
+        ...
 
 
 class RepoSesiones(Protocol):
@@ -526,6 +530,12 @@ class RepoRetroalimentacion(Protocol):
     def registrar(self, mensaje_id: int, usuario_id: int, etiqueta: str, comentario: str | None = None) -> None: ...
 
 
+class RepoRetencion(Protocol):
+    def purgar(self, sin_caso_antes_de: datetime, cerrados_antes_de: datetime, sesiones_antes_de: datetime) -> dict[str, int]:
+        """Borra correos sin riesgo y casos cerrados antiguos (con todo su análisis) y sesiones vencidas."""
+        ...
+
+
 class RepoConfiguracion(Protocol):
     def obtener(self, clave: str, defecto: Any) -> Any: ...
 
@@ -562,6 +572,7 @@ class UnidadDeTrabajo(Protocol):
     estadisticas: RepoEstadisticas
     suscripciones_push: RepoSuscripcionesPush
     conversaciones: RepoConversaciones
+    retencion: RepoRetencion
     auditoria: RegistroAuditoria
 
     def __enter__(self) -> Self: ...

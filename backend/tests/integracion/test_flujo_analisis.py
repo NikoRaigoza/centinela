@@ -47,7 +47,7 @@ def armar_entorno(config, motor_owner, **inyectados):
         uow.confirmar()
     admin = c.crear_administrador.ejecutar("admin@centinela.co", "Admin", CLAVE)
     for correo_u in ("ana@gmail.com", "luis@gmail.com"):
-        c.solicitar_registro.ejecutar(correo_u, "Persona", CLAVE)
+        c.solicitar_registro.ejecutar(correo_u, "Persona", CLAVE, True)
     for u in c.listar_usuarios.ejecutar(admin.id):
         if not u.es_admin:
             c.cambiar_estado_cuenta.ejecutar(admin.id, u.id, AccionCuenta.APROBAR)

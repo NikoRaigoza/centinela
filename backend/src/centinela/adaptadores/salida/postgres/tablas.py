@@ -94,6 +94,9 @@ class UsuarioFila(Base):
     ultimo_acceso: Mapped[datetime | None] = mapped_column(TS)
     creado_en: Mapped[datetime] = mapped_column(TS, server_default=AHORA)
     actualizado_en: Mapped[datetime] = mapped_column(TS, server_default=AHORA)
+    consentimiento_version: Mapped[str | None] = mapped_column(Text)        # Ley 1581 (migración 0005)
+    consentimiento_en: Mapped[datetime | None] = mapped_column(TS)
+    debe_cambiar_clave: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
 
 
 class CodigoRecuperacionFila(Base):

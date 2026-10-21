@@ -1,5 +1,5 @@
-// Inicio de sesión en tres posibles pasos: contraseña → código del doble factor, o → configurarlo por primera vez
-// (obligatorio para administradores).
+// Inicio de sesión: contraseña → (si el administrador le asignó una temporal) elegir la definitiva → código del doble
+// factor, o configurarlo por primera vez (obligatorio para administradores).
 
 import { useMutation } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
@@ -7,13 +7,17 @@ import { useState, type FormEvent } from "react";
 import { Link } from "react-router";
 import { ErrorApi, mensajeDeError } from "../api/cliente";
 import { auth } from "../api/servicios";
-import type { TokenAcceso } from "../api/tipos";
+import type { RespuestaInicio, TokenAcceso } from "../api/tipos";
 import { Configurar2FA } from "../componentes/Configurar2FA";
 import { Alerta } from "../componentes/ui";
 import { useSesion } from "../sesion/Sesion";
 import { MarcoAcceso } from "./Acceso";
 
-type Paso = { tipo: "clave" } | { tipo: "verificar"; token: string } | { tipo: "configurar"; token: string };
+type Paso =
+  | { tipo: "clave" }
+  | { tipo: "verificar"; token: string }
+  | { tipo: "configurar"; token: string }
+  | { tipo: "cambiar"; token: string };
 
 export function PaginaIngreso() {
   const [paso, setPaso] = useState<Paso>({ tipo: "clave" });
@@ -25,13 +29,30 @@ export function PaginaIngreso() {
   // Al entrar, la ruta de acceso redirige sola a la página pedida (ver SinSesion en app/rutas.tsx)
   const completar = (acceso: TokenAcceso) => entrar(acceso);
 
+  const seguir = (r: RespuestaInicio) => {
+    if (r.paso === "completo" && r.acceso) completar(r.acceso);
+    else if (r.paso === "verificar_2fa" && r.token_desafio) setPaso({ tipo: "verificar", token: r.token_desafio });
+    else if (r.paso === "configurar_2fa" && r.token_desafio) setPaso({ tipo: "configurar", token: r.token_desafio });
+    else if (r.paso === "cambiar_clave" && r.token_desafio) setPaso({ tipo: "cambiar", token: r.token_desafio });
+  };
   const inicio = useMutation({
     mutationFn: () => auth.iniciar(correo.trim(), clave),
     onSuccess: (r) => {
       setClave("");
-      if (r.paso === "completo" && r.acceso) completar(r.acceso);
-      else if (r.paso === "verificar_2fa" && r.token_desafio) setPaso({ tipo: "verificar", token: r.token_desafio });
-      else if (r.paso === "configurar_2fa" && r.token_desafio) setPaso({ tipo: "configurar", token: r.token_desafio });
+      seguir(r);
+    },
+  });
+  const [nueva, setNueva] = useState("");
+  const [repetida, setRepetida] = useState("");
+  const cambio = useMutation({
+    mutationFn: (token: string) => auth.cambiarClaveTemporal(nueva, token),
+    onSuccess: (r) => {
+      setNueva("");
+      setRepetida("");
+      seguir(r);
+    },
+    onError: (e) => {
+      if (e instanceof ErrorApi && e.estado === 401) setPaso({ tipo: "clave" });
     },
   });
 
@@ -48,7 +69,44 @@ export function PaginaIngreso() {
     setCodigo("");
     inicio.reset();
     verificacion.reset();
+    cambio.reset();
   };
+
+  if (paso.tipo === "cambiar") {
+    const noCoinciden = repetida.length > 0 && repetida !== nueva;
+    const enviar = (e: FormEvent) => {
+      e.preventDefault();
+      if (!noCoinciden) cambio.mutate(paso.token);
+    };
+    return (
+      <MarcoAcceso>
+        <div className="pila">
+          <h1>Elige tu nueva contraseña</h1>
+          <p className="tenue">Entraste con una contraseña temporal que te dio el administrador. Antes de seguir, elige una
+            que solo tú conozcas.</p>
+        </div>
+        <form onSubmit={enviar}>
+          <div className="campo">
+            <label htmlFor="nueva">Nueva contraseña</label>
+            <input id="nueva" className="entrada" type="password" autoComplete="new-password" required minLength={10}
+              maxLength={128} value={nueva} onChange={(e) => setNueva(e.target.value)} autoFocus aria-describedby="ayuda-nueva" />
+            <span className="ayuda" id="ayuda-nueva">Mínimo 10 caracteres, con letras y números.</span>
+          </div>
+          <div className="campo">
+            <label htmlFor="repetida">Repite la contraseña</label>
+            <input id="repetida" className="entrada" type="password" autoComplete="new-password" required value={repetida}
+              onChange={(e) => setRepetida(e.target.value)} aria-invalid={noCoinciden} />
+            {noCoinciden && <span className="ayuda" style={{ color: "var(--alto)" }}>Las contraseñas no coinciden.</span>}
+          </div>
+          {cambio.isError && <Alerta tipo="error">{mensajeDeError(cambio.error)}</Alerta>}
+          <button className="boton primario" disabled={cambio.isPending || noCoinciden}>
+            {cambio.isPending ? "Guardando…" : "Guardar y entrar"}
+          </button>
+        </form>
+        <button className="boton fantasma" onClick={reiniciar}><ArrowLeft size={16} /> Volver</button>
+      </MarcoAcceso>
+    );
+  }
 
   if (paso.tipo === "configurar") {
     return (
@@ -131,6 +189,7 @@ export function PaginaIngreso() {
         <button className="boton primario" disabled={inicio.isPending}>{inicio.isPending ? "Entrando…" : "Entrar"}</button>
       </form>
       <p className="tenue">¿No tienes cuenta? <Link to="/registro">Solicita acceso</Link></p>
+      <p className="muy-tenue">¿Olvidaste tu contraseña? Pídele al administrador una contraseña temporal.</p>
     </MarcoAcceso>
   );
 }

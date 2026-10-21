@@ -6,7 +6,7 @@ import hashlib
 from datetime import datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy import func, select, true, update
+from sqlalchemy import delete, func, select, true, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -23,6 +23,7 @@ from centinela.adaptadores.salida.postgres.tablas import (
     ModeloMlFila,
     RazonFila,
     RetroalimentacionFila,
+    SesionFila,
     UsuarioFila,
     VeredictoFila,
 )
@@ -393,3 +394,22 @@ class RepoEstadisticasSql:
             .outerjoin(VeredictoFila, (VeredictoFila.mensaje_id == MensajeAnalizadoFila.id) & VeredictoFila.vigente.is_(True))
             .group_by(BuzonFila.id).order_by(BuzonFila.correo_gmail)).all()
         return [FilaBuzonReporte(c, e, r, m, a) for c, e, r, m, a in filas]
+
+
+
+# ---------------------------------------------------------------------- retención (Ley 1581: no guardar de más)
+class RepoRetencionSql:
+    def __init__(self, s: Session):
+        self._s = s
+
+    def purgar(self, sin_caso_antes_de: datetime, cerrados_antes_de: datetime, sesiones_antes_de: datetime) -> dict[str, int]:
+        con_caso = select(CasoFila.mensaje_id).scalar_subquery()
+        bajos = self._s.execute(delete(MensajeAnalizadoFila).where(
+            MensajeAnalizadoFila.recibido_en < sin_caso_antes_de, MensajeAnalizadoFila.id.not_in(con_caso)))
+        cerrados = select(CasoFila.mensaje_id).where(
+            CasoFila.estado.in_([EstadoCaso.LIBERADO.value, EstadoCaso.CONFIRMADO.value, EstadoCaso.FALSO_POSITIVO.value]),
+            CasoFila.cerrado_en < cerrados_antes_de).scalar_subquery()
+        casos = self._s.execute(delete(MensajeAnalizadoFila).where(MensajeAnalizadoFila.id.in_(cerrados)))
+        sesiones = self._s.execute(delete(SesionFila).where(
+            (SesionFila.expira_en < sesiones_antes_de) | (SesionFila.revocada_en < sesiones_antes_de)))
+        return {"mensajes_sin_riesgo": bajos.rowcount, "casos_cerrados": casos.rowcount, "sesiones": sesiones.rowcount}

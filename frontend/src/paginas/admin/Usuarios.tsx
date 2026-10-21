@@ -1,7 +1,8 @@
-// Administración de cuentas: aprobar o rechazar solicitudes, desactivar y reactivar.
+// Administración de cuentas: aprobar o rechazar solicitudes, desactivar, reactivar y dar una contraseña temporal a
+// quien olvidó la suya.
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ShieldCheck, Users } from "lucide-react";
+import { Copy, KeyRound, ShieldCheck, Users } from "lucide-react";
 import { useState } from "react";
 import { mensajeDeError } from "../../api/cliente";
 import { admin } from "../../api/servicios";
@@ -33,6 +34,19 @@ export function PaginaUsuarios() {
   const avisar = useTostadas();
   const [filtro, setFiltro] = useState<Filtro>("pendiente");
   const [pendiente, setPendiente] = useState<{ u: Usuario; accion: AccionCuenta } | null>(null);
+  const [restablecer, setRestablecer] = useState<Usuario | null>(null);
+  const [temporal, setTemporal] = useState<{ u: Usuario; clave: string } | null>(null);
+  const claveTemporal = useMutation({
+    mutationFn: (u: Usuario) => admin.claveTemporal(u.id),
+    onSuccess: (r, u) => {
+      setRestablecer(null);
+      setTemporal({ u, clave: r.clave_temporal });
+    },
+    onError: (e) => {
+      setRestablecer(null);
+      avisar(mensajeDeError(e), "error");
+    },
+  });
   const lista = useQuery({
     queryKey: ["admin", "usuarios", filtro],
     queryFn: () => admin.usuarios(filtro === "todos" ? undefined : filtro),
@@ -76,6 +90,11 @@ export function PaginaUsuarios() {
                       <td style={{ whiteSpace: "nowrap" }}>{haceCuanto(u.ultimo_acceso)}</td>
                       <td>
                         <div className="fila" style={{ justifyContent: "flex-end" }}>
+                          {u.id !== yo.id && u.estado === "activo" && (
+                            <button className="boton pequeno" onClick={() => setRestablecer(u)} title="Contraseña temporal">
+                              <KeyRound size={14} aria-hidden /> Contraseña
+                            </button>
+                          )}
                           {u.id !== yo.id && ACCIONES[u.estado].map((a) => (
                             <button key={a} className={`boton pequeno ${a === "aprobar" ? "exito" : ""}`} onClick={() => setPendiente({ u, accion: a })}>
                               {TEXTO[a].boton}
@@ -94,6 +113,27 @@ export function PaginaUsuarios() {
         textoConfirmar={pendiente ? TEXTO[pendiente.accion].boton : ""} tono={pendiente ? TEXTO[pendiente.accion].tono : "primario"}
         ocupado={cambiar.isPending} cancelar={() => setPendiente(null)} confirmar={() => pendiente && cambiar.mutate(pendiente)}>
         {pendiente && <p><strong>{pendiente.u.nombre}</strong> ({pendiente.u.correo}) {TEXTO[pendiente.accion].pregunta}</p>}
+      </DialogoConfirmar>
+      <DialogoConfirmar abierto={!!restablecer} titulo="¿Dar una contraseña temporal?" textoConfirmar="Generar contraseña"
+        ocupado={claveTemporal.isPending} cancelar={() => setRestablecer(null)}
+        confirmar={() => restablecer && claveTemporal.mutate(restablecer)}>
+        {restablecer && <p>Se cerrarán las sesiones de <strong>{restablecer.nombre}</strong> ({restablecer.correo}) y su
+          contraseña actual dejará de servir. Al entrar con la temporal deberá elegir una nueva. Si tiene doble factor, lo
+          seguirá necesitando.</p>}
+      </DialogoConfirmar>
+      <DialogoConfirmar abierto={!!temporal} titulo="Contraseña temporal" textoConfirmar="Listo" cancelar={() => setTemporal(null)}
+        confirmar={() => setTemporal(null)}>
+        {temporal && (
+          <div className="pila">
+            <p>Entrégasela a <strong>{temporal.u.nombre}</strong> por un canal seguro (en persona o por teléfono). No se
+              volverá a mostrar.</p>
+            <div className="fila clave-temporal">
+              <code>{temporal.clave}</code>
+              <button className="boton pequeno" onClick={() => void navigator.clipboard?.writeText(temporal.clave)
+                .then(() => avisar("Contraseña copiada."))}><Copy size={14} aria-hidden /> Copiar</button>
+            </div>
+          </div>
+        )}
       </DialogoConfirmar>
     </>
   );

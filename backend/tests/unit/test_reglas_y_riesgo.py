@@ -42,6 +42,13 @@ def test_autenticacion_no_confiable_se_ignora():
     assert not any(a is Area.AUTENTICACION for a, _ in areas(c))
 
 
+def test_autenticacion_ausente_es_desconocida_no_phishing():
+    for ausente in (Autenticacion(), Autenticacion(confiable=True), Autenticacion(dmarc=ResultadoAuth.PASS, confiable=True)):
+        assert not any(a is Area.AUTENTICACION for a, _ in areas(correo(autenticacion=ausente)))
+    explicita = Autenticacion(spf=ResultadoAuth.NONE, dkim=ResultadoAuth.NONE, confiable=True)
+    assert (Area.AUTENTICACION, Gravedad.BAJA) in areas(correo(autenticacion=explicita))
+
+
 def test_suplantacion_desde_cuenta_gratuita():
     c = correo(remitente_nombre="Nequi Soporte", remitente_dominio="gmail.com")
     razon = next(r for r in evaluar_reglas(c, CATALOGO).razones if r.area is Area.SUPLANTACION)

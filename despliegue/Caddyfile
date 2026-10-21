@@ -1,0 +1,20 @@
+# Caddy: termina HTTPS (certificado de Let's Encrypt automático y renovado solo) y reenvía todo a la API.
+{
+	email {$CENTINELA_CORREO_TLS}
+}
+
+{$CENTINELA_DOMINIO} {
+	encode zstd gzip
+	# Los .eml que se suben para analizar pesan hasta 10 MB
+	request_body {
+		max_size 12MB
+	}
+	reverse_proxy api:8000 {
+		health_uri /api/salud
+		health_interval 30s
+	}
+	log {
+		output stdout
+		format console
+	}
+}

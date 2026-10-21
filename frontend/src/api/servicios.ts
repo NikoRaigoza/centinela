@@ -18,6 +18,7 @@ import type {
   EstadoCaso,
   EstadoCuenta,
   FormatoReporte,
+  InfoLegal,
   MensajeRecibido,
   ModoCuarentena,
   Modelo,
@@ -33,8 +34,11 @@ import type {
 export const auth = {
   iniciar: (correo: string, clave: string) =>
     pedir<RespuestaInicio>("/api/auth/inicio", { metodo: "POST", json: { correo, clave } }),
-  registrar: (correo: string, nombre: string, clave: string) =>
-    pedir<{ mensaje: string }>("/api/auth/registro", { metodo: "POST", json: { correo, nombre, clave } }),
+  registrar: (correo: string, nombre: string, clave: string, acepta_politica: boolean) =>
+    pedir<{ mensaje: string }>("/api/auth/registro", { metodo: "POST", json: { correo, nombre, clave, acepta_politica } }),
+  /** Primer ingreso con la contraseña temporal del administrador: se elige la definitiva. */
+  cambiarClaveTemporal: (nueva: string, tokenDesafio: string) =>
+    pedir<RespuestaInicio>("/api/auth/clave-temporal", { metodo: "POST", json: { nueva }, token: tokenDesafio }),
   verificar2fa: (codigo: string, tokenDesafio: string) =>
     pedir<TokenAcceso>("/api/auth/2fa/verificacion", { metodo: "POST", json: { codigo }, token: tokenDesafio }),
   /** Sin tokenDesafio usa la sesión actual (activar el doble factor desde "Mi cuenta"). */
@@ -49,6 +53,12 @@ export const cuenta = {
   yo: () => pedir<Usuario>("/api/usuarios/yo"),
   cambiarClave: (actual: string, nueva: string) =>
     pedir<TokenAcceso>("/api/usuarios/yo/clave", { metodo: "PUT", json: { actual, nueva }, reintentar: false }),
+  eliminar: (clave: string) =>
+    pedir<void>("/api/usuarios/yo/eliminacion", { metodo: "POST", json: { clave }, reintentar: false }),
+};
+
+export const publico = {
+  legal: () => pedir<InfoLegal>("/api/publico/legal"),
 };
 
 export const panel = {
@@ -94,6 +104,8 @@ export const admin = {
   usuarios: (estado?: EstadoCuenta) => pedir<Usuario[]>(`/api/admin/usuarios${estado ? `?estado=${estado}` : ""}`),
   cambiarEstado: (id: number, accion: AccionCuenta) =>
     pedir<Usuario>(`/api/admin/usuarios/${id}/${accion}`, { metodo: "POST" }),
+  claveTemporal: (id: number) =>
+    pedir<{ clave_temporal: string }>(`/api/admin/usuarios/${id}/clave-temporal`, { metodo: "POST" }),
   buzones: () => pedir<Buzon[]>("/api/admin/buzones"),
   modelos: () => pedir<Modelo[]>("/api/admin/modelos"),
 };

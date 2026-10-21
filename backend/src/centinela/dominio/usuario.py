@@ -11,6 +11,9 @@ from centinela.dominio.errores import AccesoDenegado, Conflicto, CredencialesInv
 _RE_CORREO = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 CLAVE_MIN = 10
 CLAVE_MAX = 128
+# Versión vigente de la Política de tratamiento de datos (frontend/src/paginas/Legal.tsx). Si cambia el texto en algo
+# sustancial, se sube la versión: queda registrado qué aceptó cada persona.
+VERSION_POLITICA = "2026-10-20"
 
 
 class Rol(StrEnum):
@@ -69,11 +72,19 @@ class Usuario:
     aprobado_en: datetime | None = None
     ultimo_acceso: datetime | None = None
     creado_en: datetime | None = None
+    consentimiento_version: str | None = None    # Política de tratamiento de datos aceptada (Ley 1581)
+    consentimiento_en: datetime | None = None
+    debe_cambiar_clave: bool = False             # tiene una contraseña temporal asignada por el administrador
 
     # ------------------------------------------------------------------ creación
     @classmethod
-    def solicitar(cls, correo: str, nombre: str, clave_hash: str) -> Usuario:
-        return cls(correo=normalizar_correo(correo), nombre=normalizar_nombre(nombre), clave_hash=clave_hash)
+    def solicitar(cls, correo: str, nombre: str, clave_hash: str, acepta_politica: bool = False,
+                  ahora: datetime | None = None) -> Usuario:
+        """Registro público: sin la autorización expresa del tratamiento de datos no se crea la cuenta (Ley 1581)."""
+        if not acepta_politica or ahora is None:
+            raise DatoInvalido("Para crear tu cuenta debes autorizar el tratamiento de tus datos personales.")
+        return cls(correo=normalizar_correo(correo), nombre=normalizar_nombre(nombre), clave_hash=clave_hash,
+                   consentimiento_version=VERSION_POLITICA, consentimiento_en=ahora)
 
     @classmethod
     def administrador_inicial(cls, correo: str, nombre: str, clave_hash: str, ahora: datetime) -> Usuario:
@@ -141,6 +152,20 @@ class Usuario:
 
     def reactivar(self, admin: Usuario) -> None:
         self._cambiar_estado(admin, EstadoCuenta.DESACTIVADO, EstadoCuenta.ACTIVO)
+
+    def asignar_clave_temporal(self, admin: Usuario, clave_hash: str) -> None:
+        """El administrador restablece el acceso de alguien que olvidó su contraseña. La cuenta se desbloquea y la
+        persona deberá cambiarla al entrar. No toca el doble factor: si lo tiene activo, lo seguirá necesitando."""
+        self._exigir_admin(admin)
+        if self.estado is not EstadoCuenta.ACTIVO:
+            raise TransicionInvalida("Solo se puede restablecer la contraseña de una cuenta activa.")
+        self.clave_hash = clave_hash
+        self.debe_cambiar_clave = True
+        self.intentos_fallidos, self.bloqueado_hasta = 0, None
+
+    def cambiar_clave(self, clave_hash: str) -> None:
+        self.clave_hash = clave_hash
+        self.debe_cambiar_clave = False
 
     # ------------------------------------------------------------------ doble factor (TOTP)
     def preparar_2fa(self, secreto_cifrado: bytes) -> None:

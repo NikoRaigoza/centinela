@@ -13,7 +13,8 @@ export function PaginaRegistro() {
   const [correo, setCorreo] = useState("");
   const [clave, setClave] = useState("");
   const [repetida, setRepetida] = useState("");
-  const registro = useMutation({ mutationFn: () => auth.registrar(correo.trim(), nombre.trim(), clave) });
+  const [acepta, setAcepta] = useState(false);
+  const registro = useMutation({ mutationFn: () => auth.registrar(correo.trim(), nombre.trim(), clave, acepta) });
   const noCoinciden = repetida.length > 0 && repetida !== clave;
 
   if (registro.isSuccess) {
@@ -59,8 +60,16 @@ export function PaginaRegistro() {
             onChange={(e) => setRepetida(e.target.value)} aria-invalid={noCoinciden} />
           {noCoinciden && <span className="ayuda" style={{ color: "var(--alto)" }}>Las contraseñas no coinciden.</span>}
         </div>
+        <label className="casilla autorizacion">
+          <input type="checkbox" checked={acepta} onChange={(e) => setAcepta(e.target.checked)} required />
+          <span>
+            Autorizo el tratamiento de mis datos personales según la{" "}
+            <Link to="/privacidad" target="_blank">Política de tratamiento de datos</Link> y acepto los{" "}
+            <Link to="/terminos" target="_blank">Términos de uso</Link>.
+          </span>
+        </label>
         {registro.isError && <Alerta tipo="error">{mensajeDeError(registro.error)}</Alerta>}
-        <button className="boton primario" disabled={registro.isPending || noCoinciden}>
+        <button className="boton primario" disabled={registro.isPending || noCoinciden || !acepta}>
           {registro.isPending ? "Enviando…" : "Enviar solicitud"}
         </button>
       </form>

@@ -1,11 +1,13 @@
-// Mi cuenta: datos, notificaciones push, cambio de contraseña y doble factor.
+// Mi cuenta: datos, notificaciones push, cambio de contraseña, doble factor y eliminación de la cuenta (Ley 1581).
 
 import { useMutation } from "@tanstack/react-query";
-import { ShieldCheck } from "lucide-react";
+import { ShieldCheck, Trash2 } from "lucide-react";
+import { Link } from "react-router";
 import { useState, type FormEvent } from "react";
 import { mensajeDeError } from "../api/cliente";
 import { cuenta } from "../api/servicios";
 import { Configurar2FA } from "../componentes/Configurar2FA";
+import { DialogoConfirmar } from "../componentes/Dialogo";
 import { Notificaciones } from "../componentes/Notificaciones";
 import { useTostadas } from "../componentes/Tostadas";
 import { Alerta } from "../componentes/ui";
@@ -90,6 +92,42 @@ function DobleFactor() {
   );
 }
 
+function EliminarCuenta() {
+  const { salir } = useSesion();
+  const [abierto, setAbierto] = useState(false);
+  const [clave, setClave] = useState("");
+  const eliminar = useMutation({
+    mutationFn: () => cuenta.eliminar(clave),
+    onSuccess: () => void salir(),
+  });
+  const cerrar = () => {
+    setAbierto(false);
+    setClave("");
+    eliminar.reset();
+  };
+  return (
+    <div className="pila">
+      <p className="tenue">
+        Se borran tu cuenta y todos tus datos: buzones conectados (también se quita el permiso en Google), correos
+        analizados, casos, conversaciones y dispositivos. No se puede deshacer.
+      </p>
+      <button className="boton peligro" style={{ justifySelf: "start" }} onClick={() => setAbierto(true)}>
+        <Trash2 size={16} aria-hidden /> Eliminar mi cuenta
+      </button>
+      <DialogoConfirmar abierto={abierto} titulo="¿Eliminar tu cuenta y todos tus datos?" textoConfirmar="Eliminar definitivamente"
+        tono="peligro" ocupado={eliminar.isPending} cancelar={cerrar} confirmar={() => clave && eliminar.mutate()}>
+        <p>Escribe tu contraseña para confirmar. Esta acción no se puede deshacer.</p>
+        <div className="campo">
+          <label htmlFor="clave-eliminar">Contraseña</label>
+          <input id="clave-eliminar" className="entrada" type="password" autoComplete="current-password" value={clave}
+            onChange={(e) => setClave(e.target.value)} data-autofoco />
+        </div>
+        {eliminar.isError && <Alerta tipo="error">{mensajeDeError(eliminar.error)}</Alerta>}
+      </DialogoConfirmar>
+    </div>
+  );
+}
+
 export function PaginaCuenta() {
   const usuario = useUsuario();
   return (
@@ -103,6 +141,9 @@ export function PaginaCuenta() {
           <dt>Rol</dt><dd>{usuario.rol === "administrador" ? "Administrador" : "Usuario"}</dd>
           <dt>Último acceso</dt><dd>{formatoFechaHora(usuario.ultimo_acceso)}</dd>
           <dt>Cuenta creada</dt><dd>{formatoFechaHora(usuario.creado_en)}</dd>
+          {usuario.consentimiento_en && (<><dt>Autorización de datos</dt>
+            <dd>Aceptaste la <Link to="/privacidad">política</Link> (versión {usuario.consentimiento_version}) el{" "}
+              {formatoFechaHora(usuario.consentimiento_en)}</dd></>)}
         </dl>
       </section>
       <section className="tarjeta" id="notificaciones"><h2>Notificaciones</h2><Notificaciones /></section>
@@ -110,6 +151,7 @@ export function PaginaCuenta() {
         <section className="tarjeta"><h2>Doble factor (2FA)</h2><DobleFactor /></section>
         <section className="tarjeta"><h2>Cambiar contraseña</h2><CambiarClave /></section>
       </div>
+      <section className="tarjeta zona-peligro"><h2>Eliminar mi cuenta</h2><EliminarCuenta /></section>
     </>
   );
 }

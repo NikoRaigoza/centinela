@@ -17,7 +17,9 @@ dependencies = [
     "cryptography>=43",
     "pyjwt>=2.10",
     "httpx>=0.28",
-    "xgboost>=3.0",
+    # En Linux (servidor y CI) la variante solo-CPU: la normal arrastra ~350 MB de librerías CUDA que no se usan
+    "xgboost>=3.0; sys_platform != 'linux'",
+    "xgboost-cpu>=3.0; sys_platform == 'linux'",
     "numpy>=2.1",
     "reportlab>=4.2",
     "openpyxl>=3.1",

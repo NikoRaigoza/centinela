@@ -2,6 +2,7 @@
 
 import { EyeOff, MessageSquareText, ShieldCheck } from "lucide-react";
 import type { ReactNode } from "react";
+import { Link } from "react-router";
 import { Escudo } from "../componentes/Escudo";
 
 export function MarcoAcceso({ children }: { children: ReactNode }) {
@@ -25,7 +26,12 @@ export function MarcoAcceso({ children }: { children: ReactNode }) {
         </p>
       </section>
       <section className="acceso-formulario">
-        <div className="acceso-caja">{children}</div>
+        <div className="acceso-caja">
+          {children}
+          <nav className="enlaces-legales muy-tenue" aria-label="Información legal">
+            <Link to="/privacidad">Política de privacidad</Link> · <Link to="/terminos">Términos de uso</Link>
+          </nav>
+        </div>
       </section>
     </div>
   );

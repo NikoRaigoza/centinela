@@ -1,0 +1,129 @@
+# Centinela en producción: un solo servidor con Docker Compose.
+#
+#   cp despliegue/env.ejemplo .env          # infraestructura: dominio y contraseñas de la base de datos
+#   cp despliegue/env.app.ejemplo .env.app  # aplicación: secretos, Gmail, push, Gemini, Pub/Sub
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Servicios: caddy (HTTPS automático) → api (API + panel) · worker (revisa buzones, avisos, retención) ·
+# migrar (aplica las migraciones y termina) · bd (PostgreSQL, sin puerto público) · respaldo (copia diaria cifrada).
+# Guía completa: despliegue/README.md
+name: centinela
+
+x-app: &app
+  build: .
+  image: centinela:latest
+  restart: unless-stopped
+  env_file: .env.app
+  environment:
+    CENTINELA_ENTORNO: produccion
+    CENTINELA_BD_URL: postgresql+psycopg://centinela_app:${CENTINELA_CLAVE_APP:?Define CENTINELA_CLAVE_APP en .env}@bd:5432/centinela
+    CENTINELA_BD_URL_MIGRACIONES: postgresql+psycopg://centinela_owner:${CENTINELA_CLAVE_OWNER:?Define CENTINELA_CLAVE_OWNER en .env}@bd:5432/centinela
+    CENTINELA_URL_PANEL: https://${CENTINELA_DOMINIO:?Define CENTINELA_DOMINIO en .env}
+    CENTINELA_GMAIL_REDIRECT_URI: https://${CENTINELA_DOMINIO}/api/gmail/callback
+    CENTINELA_ORIGENES_CORS: '["https://${CENTINELA_DOMINIO}"]'
+  volumes:
+    - ./backend/modelos:/app/modelos:ro          # versiones nuevas del modelo: git pull + «modelos registrar», sin reconstruir
+  logging: &registros
+    driver: json-file
+    options: { max-size: "10m", max-file: "5" }
+
+services:
+  bd:
+    image: postgres:16-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en .env}
+      CENTINELA_CLAVE_OWNER: ${CENTINELA_CLAVE_OWNER}
+      CENTINELA_CLAVE_APP: ${CENTINELA_CLAVE_APP}
+    # Ajustada para un servidor pequeño (1-2 GB de RAM)
+    command: ["postgres", "-c", "shared_buffers=128MB", "-c", "max_connections=50", "-c", "work_mem=4MB",
+              "-c", "log_min_duration_statement=2000", "-c", "timezone=UTC"]
+    volumes:
+      - datos_bd:/var/lib/postgresql/data
+      - ./backend/scripts/crear_bd.sql:/scripts/crear_bd.sql:ro
+      - ./backend/scripts/docker-init.sh:/docker-entrypoint-initdb.d/10-centinela.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d centinela"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *registros
+
+  migrar:
+    <<: *app
+    command: ["sh", "-c", "alembic upgrade head && echo \"Base de datos en la migración: $$(alembic current 2>/dev/null)\""]
+    restart: "no"
+    healthcheck: { disable: true }
+    depends_on:
+      bd: { condition: service_healthy }
+
+  api:
+    <<: *app
+    depends_on:
+      bd: { condition: service_healthy }
+      migrar: { condition: service_completed_successfully }
+
+  worker:
+    <<: *app
+    command: ["centinela", "worker"]
+    healthcheck: { disable: true }
+    stop_grace_period: 30s
+    depends_on:
+      bd: { condition: service_healthy }
+      migrar: { condition: service_completed_successfully }
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      CENTINELA_DOMINIO: ${CENTINELA_DOMINIO}
+      CENTINELA_CORREO_TLS: ${CENTINELA_CORREO_TLS:?Define CENTINELA_CORREO_TLS en .env (avisos de Let's Encrypt)}
+    volumes:
+      - ./despliegue/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_datos:/data                        # certificados: si se borran, Caddy los vuelve a pedir
+      - caddy_config:/config
+    depends_on:
+      api: { condition: service_healthy }
+    logging: *registros
+
+  respaldo:
+    image: postgres:16-bookworm
+    restart: unless-stopped
+    entrypoint: ["sh", "/scripts/respaldo.sh"]
+    environment:
+      PGPASSWORD: ${CENTINELA_CLAVE_OWNER}
+      CENTINELA_CLAVE_RESPALDOS: ${CENTINELA_CLAVE_RESPALDOS:?Define CENTINELA_CLAVE_RESPALDOS en .env}
+      CENTINELA_DIAS_RESPALDO: ${CENTINELA_DIAS_RESPALDO:-14}
+      CENTINELA_HORA_RESPALDO_UTC: ${CENTINELA_HORA_RESPALDO_UTC:-08:00}    # 3:00 a. m. en Colombia
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}                                  # solo para restaurar en una base de prueba
+    volumes:
+      - ./despliegue/respaldo.sh:/scripts/respaldo.sh:ro
+      - ./despliegue/restaurar.sh:/scripts/restaurar.sh:ro
+      - ./respaldos:/respaldos
+    depends_on:
+      migrar: { condition: service_completed_successfully }
+    logging: *registros
+
+  # Copia de los respaldos fuera del servidor (Azure Blob Storage). Opcional: se activa con
+  #   docker compose -f docker-compose.prod.yml --profile nube up -d
+  copia-nube:
+    image: rclone/rclone:1.71
+    profiles: ["nube"]
+    restart: unless-stopped
+    entrypoint: ["sh", "-c", "while true; do rclone copy /respaldos nube:${CENTINELA_CONTENEDOR_BLOB:-respaldos} --max-age 48h -v; sleep 21600; done"]
+    environment:
+      RCLONE_CONFIG_NUBE_TYPE: azureblob
+      RCLONE_CONFIG_NUBE_SAS_URL: ${CENTINELA_BLOB_SAS_URL:-}
+    volumes:
+      - ./respaldos:/respaldos:ro
+    logging: *registros
+
+volumes:
+  datos_bd:
+  caddy_datos:
+  caddy_config:

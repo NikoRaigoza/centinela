@@ -78,7 +78,8 @@ def _autenticacion(c: CorreoParseado, r: ResultadoReglas) -> None:
         r.agregar(Area.AUTENTICACION, Gravedad.MEDIA, "La firma digital del correo no es válida (falló DKIM).")
     if a.spf is ResultadoAuth.PASS and a.dkim is ResultadoAuth.PASS and a.dmarc is ResultadoAuth.PASS:
         r.positivas.append("El remitente pasó las verificaciones SPF, DKIM y DMARC.")
-    elif a.dkim in (None, ResultadoAuth.NONE) and a.spf in (None, ResultadoAuth.NONE):
+    elif a.dkim is ResultadoAuth.NONE and a.spf is ResultadoAuth.NONE:
+        # Solo si Google dijo explícitamente "none". Un resultado ausente es "desconocido", nunca señal de phishing.
         r.agregar(Area.AUTENTICACION, Gravedad.BAJA, "Ningún mecanismo de autenticación respalda al remitente.")
 
 

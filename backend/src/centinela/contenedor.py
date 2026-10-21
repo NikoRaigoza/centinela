@@ -25,6 +25,7 @@ from centinela.aplicacion.casos_uso import (
     asistente,
     buzones,
     casos,
+    mantenimiento,
     notificaciones,
     panel,
     reportes,
@@ -64,6 +65,10 @@ class Contenedor:
     cerrar_sesion: acceso.CerrarSesion
     obtener_usuario: acceso.ObtenerUsuario
     cambiar_clave: acceso.CambiarClave
+    cambiar_clave_temporal: acceso.CambiarClaveTemporal
+    restablecer_clave: acceso.RestablecerClave
+    eliminar_mi_cuenta: acceso.EliminarMiCuenta
+    aplicar_retencion: mantenimiento.AplicarRetencion
     listar_usuarios: acceso.ListarUsuarios
     cambiar_estado_cuenta: acceso.CambiarEstadoCuenta
     # buzones
@@ -154,6 +159,10 @@ def construir(config: Configuracion | None = None, autorizacion: AutorizacionCor
         cerrar_sesion=acceso.CerrarSesion(uow, reloj),
         obtener_usuario=acceso.ObtenerUsuario(uow, reloj),
         cambiar_clave=acceso.CambiarClave(uow, reloj, hasher),
+        cambiar_clave_temporal=acceso.CambiarClaveTemporal(uow, reloj, hasher),
+        restablecer_clave=acceso.RestablecerClave(uow, reloj, hasher),
+        eliminar_mi_cuenta=acceso.EliminarMiCuenta(uow, reloj, hasher, cifrador, autorizacion),
+        aplicar_retencion=mantenimiento.AplicarRetencion(uow, reloj),
         listar_usuarios=acceso.ListarUsuarios(uow, reloj),
         cambiar_estado_cuenta=acceso.CambiarEstadoCuenta(uow, reloj),
         iniciar_conexion_gmail=buzones.IniciarConexionGmail(uow, reloj, autorizacion),

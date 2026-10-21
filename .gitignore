@@ -27,3 +27,7 @@ dist/
 
 # Datasets (se descargan de Mendeley; ver ml/README.md)
 ml/datos/
+
+# Despliegue: secretos del servidor y copias de la base de datos
+.env.app
+respaldos/

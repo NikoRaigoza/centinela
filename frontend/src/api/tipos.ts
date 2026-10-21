@@ -22,6 +22,17 @@ export interface Usuario {
   totp_activo: boolean;
   ultimo_acceso: string | null;
   creado_en: string | null;
+  consentimiento_version?: string | null;
+  consentimiento_en?: string | null;
+  debe_cambiar_clave?: boolean;
+}
+
+export interface InfoLegal {
+  version_politica: string;
+  responsable: string;
+  correo_contacto: string | null;
+  dias_sin_riesgo: number;
+  dias_casos: number;
 }
 
 export interface TokenAcceso {
@@ -32,7 +43,7 @@ export interface TokenAcceso {
 }
 
 export interface RespuestaInicio {
-  paso: "completo" | "verificar_2fa" | "configurar_2fa";
+  paso: "completo" | "verificar_2fa" | "configurar_2fa" | "cambiar_clave";
   acceso: TokenAcceso | null;
   token_desafio: string | null;
 }

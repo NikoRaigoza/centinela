@@ -4,6 +4,8 @@
     uv run centinela api            # levanta la API en http://localhost:8000
     uv run centinela worker         # revisa los buzones conectados cada 30 s y entrega los avisos
     uv run centinela generar-vapid --contacto mailto:admin@ejemplo.co   # llaves de las notificaciones push
+    uv run centinela verificar-config   # revisa que la configuración sea segura para producción
+    uv run centinela retencion          # aplica ya la retención de datos (el worker la hace cada día)
 """
 from __future__ import annotations
 
@@ -33,8 +35,11 @@ def _crear_admin(args: argparse.Namespace) -> int:
 def _api(args: argparse.Namespace) -> int:
     import uvicorn
 
+    # --proxy: detrás de Caddy, la IP real del visitante llega en X-Forwarded-For. Solo es seguro si la API no está
+    # expuesta directamente a internet (en docker-compose.prod.yml únicamente Caddy la alcanza).
     uvicorn.run("centinela.adaptadores.entrada.api.app:crear_app", factory=True, host=args.host, port=args.puerto,
-                reload=args.recargar)
+                reload=args.recargar, proxy_headers=args.proxy, forwarded_allow_ips="*" if args.proxy else None,
+                server_header=False)
     return 0
 
 
@@ -49,9 +54,10 @@ def _worker(args: argparse.Namespace) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     log = logging.getLogger("centinela.worker")
     c = construir()
-    if not c.config.gmail_configurado:
-        print("Falta configurar Gmail (CENTINELA_GMAIL_CLIENT_ID y CENTINELA_GMAIL_CLIENT_SECRET).", file=sys.stderr)
-        return 1
+    gmail = c.config.gmail_configurado
+    if not gmail:
+        log.warning("Gmail no está configurado (CENTINELA_GMAIL_CLIENT_ID y CENTINELA_GMAIL_CLIENT_SECRET): "
+                    "el worker solo hará las tareas de mantenimiento hasta que lo configures y lo reinicies.")
     parar = threading.Event()
     despertar = threading.Event()                # lo activa una señal de parada o un aviso de Gmail en tiempo real
 
@@ -71,11 +77,21 @@ def _worker(args: argparse.Namespace) -> int:
                  c.revisar_pendientes.intervalo_respaldo_segundos())
     else:
         log.info("Worker iniciado: revisa cada buzón cada %s s", c.revisar_pendientes.intervalo_segundos())
-    proxima_renovacion = 0.0
+    proxima_renovacion = proxima_retencion = 0.0
     while not parar.is_set():
         inicio = time.monotonic()
         despertar.clear()
         try:
+            if inicio >= proxima_retencion:
+                r = c.aplicar_retencion.ejecutar()
+                log.info("Retención de datos: %s correos sin riesgo, %s casos cerrados y %s sesiones borrados",
+                         r.mensajes_sin_riesgo, r.casos_cerrados, r.sesiones)
+                proxima_retencion = inicio + 24 * 3600
+            if not gmail:
+                if args.una_vez:
+                    break
+                despertar.wait(60)
+                continue
             if tiempo_real and inicio >= proxima_renovacion:
                 if renovados := c.renovar_vigilancias.ejecutar():
                     log.info("Avisos en tiempo real activados o renovados en %s buzón(es)", renovados)
@@ -92,6 +108,32 @@ def _worker(args: argparse.Namespace) -> int:
             break
         despertar.wait(max(1.0, args.pausa - (time.monotonic() - inicio)))
     log.info("Worker detenido")
+    return 0
+
+
+def _verificar_config(_: argparse.Namespace) -> int:
+    from centinela.config import obtener_configuracion
+
+    c = obtener_configuracion()
+    problemas = c.problemas_produccion()
+    print(f"Entorno: {c.entorno}")
+    for nombre, activo in (("Gmail", c.gmail_configurado), ("Notificaciones push", c.push_configurado),
+                           ("Asistente con Gemini", c.ia_configurada), ("Gmail en tiempo real", c.tiempo_real_configurado)):
+        print(f"  {'✔' if activo else '·'} {nombre}{'' if activo else ' (no configurado)'}")
+    if problemas:
+        print("Problemas para producción:")
+        for p in problemas:
+            print(f"  ✘ {p}")
+        return 1
+    print("La configuración es apta para producción.")
+    return 0
+
+
+def _retencion(_: argparse.Namespace) -> int:
+    from centinela.contenedor import construir
+
+    r = construir().aplicar_retencion.ejecutar()
+    print(f"Borrados: {r.mensajes_sin_riesgo} correos sin riesgo, {r.casos_cerrados} casos cerrados, {r.sesiones} sesiones.")
     return 0
 
 
@@ -156,7 +198,12 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--host", default="127.0.0.1")
     s.add_argument("--puerto", type=int, default=8000)
     s.add_argument("--recargar", action="store_true")
+    s.add_argument("--proxy", action="store_true", help="confía en X-Forwarded-For (detrás de Caddy)")
     s.set_defaults(fn=_api)
+
+    sub.add_parser("verificar-config", help="Revisa que la configuración sea segura para producción").set_defaults(
+        fn=_verificar_config)
+    sub.add_parser("retencion", help="Aplica ya la retención de datos").set_defaults(fn=_retencion)
 
     w = sub.add_parser("worker", help="Revisa periódicamente los buzones conectados")
     w.add_argument("--pausa", type=float, default=5.0, help="segundos entre ciclos (cada buzón respeta su intervalo)")

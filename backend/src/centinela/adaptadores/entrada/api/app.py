@@ -11,7 +11,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy import text
 
-from centinela.adaptadores.entrada.api.rutas_acceso import auth, cuenta
+from centinela.adaptadores.entrada.api.limite import LimitadorIP
+from centinela.adaptadores.entrada.api.rutas_acceso import auth, cuenta, publico
 from centinela.adaptadores.entrada.api.rutas_admin import admin
 from centinela.adaptadores.entrada.api.rutas_asistente import asistente, push
 from centinela.adaptadores.entrada.api.rutas_buzones import admin_buzones, buzones, gmail
@@ -52,6 +53,9 @@ mimetypes.add_type("application/manifest+json", ".webmanifest")
 def crear_app(contenedor: Contenedor | None = None) -> FastAPI:
     contenedor = contenedor or construir()
     produccion = contenedor.config.entorno == "produccion"
+    if produccion and (problemas := contenedor.config.problemas_produccion()):
+        raise RuntimeError("Configuración insegura para producción:\n  - " + "\n  - ".join(problemas))
+    limitador = LimitadorIP()
     app = FastAPI(title="Centinela API", version="0.1.0",
                   description="Detección de phishing en correos de Gmail para usuarios en Colombia.",
                   docs_url=None if produccion else "/api/docs", openapi_url=None if produccion else "/api/openapi.json")
@@ -59,6 +63,16 @@ def crear_app(contenedor: Contenedor | None = None) -> FastAPI:
 
     app.add_middleware(CORSMiddleware, allow_origins=contenedor.config.origenes_cors, allow_credentials=True,
                        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"], allow_headers=["Authorization", "Content-Type"])
+
+    @app.middleware("http")
+    async def limite_por_ip(request: Request, call_next):
+        if request.method == "POST" and limitador.aplica(request.url.path):
+            ip = request.client.host if request.client else "desconocida"
+            if (espera := limitador.permitir(request.url.path, ip)) is not None:
+                return JSONResponse({"codigo": "demasiadas_peticiones",
+                                     "mensaje": f"Demasiados intentos desde tu conexión. Espera {espera} segundos."},
+                                    status_code=429, headers={"Retry-After": str(espera)})
+        return await call_next(request)
 
     @app.middleware("http")
     async def cabeceras_seguridad(request: Request, call_next):
@@ -83,13 +97,14 @@ def crear_app(contenedor: Contenedor | None = None) -> FastAPI:
         return JSONResponse({"codigo": "dato_invalido", "mensaje": "Revisa los datos enviados: " + ", ".join(campos)},
                             status_code=422)
 
-    @app.get("/api/salud", tags=["Sistema"])
+    @app.api_route("/api/salud", methods=["GET", "HEAD"], tags=["Sistema"])      # HEAD: monitores como UptimeRobot
     def salud() -> dict:
         with contenedor.motor.connect() as conexion:
             conexion.execute(text("SELECT 1"))
         return {"estado": "ok", "base_de_datos": "ok"}
 
     app.include_router(auth)
+    app.include_router(publico)
     app.include_router(cuenta)
     app.include_router(admin)
     app.include_router(buzones)

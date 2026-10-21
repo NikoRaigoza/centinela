@@ -1,0 +1,19 @@
+# Solo entra a la imagen lo que se copia explícitamente en el Dockerfile; esto acelera la construcción y evita
+# que secretos o datos lleguen a la imagen por accidente.
+.git
+**/.env
+**/.env.*
+**/*.env
+**/node_modules
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+**/.DS_Store
+frontend/dist
+frontend/tsconfig.tsbuildinfo
+backend/tests
+legacy
+ml
+docs
+respaldos

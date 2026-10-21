@@ -3,6 +3,7 @@
   * acceso:          15 min, viaja en el encabezado Authorization (vive en memoria del navegador).
   * verificar_2fa /
     configurar_2fa:  5 min, prueba que la contraseña ya fue correcta y solo sirve para el paso de doble factor.
+  * cambiar_clave:   5 min, la contraseña temporal fue correcta; solo sirve para elegir la definitiva.
 El token de renovación NO es JWT: es aleatorio, va en cookie httpOnly y su hash está en la tabla `sesion`.
 """
 from __future__ import annotations
@@ -21,6 +22,7 @@ EMISOR = "centinela"
 ACCESO = "acceso"
 VERIFICAR_2FA = "verificar_2fa"
 CONFIGURAR_2FA = "configurar_2fa"
+CAMBIAR_CLAVE = "cambiar_clave"      # entró con contraseña temporal: solo sirve para elegir una nueva
 OAUTH_GMAIL = "oauth_gmail"
 MINUTOS_OAUTH = 10
 

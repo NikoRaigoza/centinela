@@ -37,22 +37,22 @@ def _codigo(s, secreto):
 
 def _usuario_aprobado(s, correo="ana@gmail.com"):
     adm = s.crear_admin.ejecutar("admin@centinela.co", "Admin", CLAVE)
-    s.registro.ejecutar(correo, "Ana Pérez", CLAVE)
+    s.registro.ejecutar(correo, "Ana Pérez", CLAVE, True)
     u = s.uow.almacen.usuarios[2]
     s.estado.ejecutar(adm.id, u.id, a.AccionCuenta.APROBAR)
     return adm, u
 
 
 def test_registro_queda_pendiente_y_no_revela_duplicados(s):
-    s.registro.ejecutar("Ana@Gmail.com", "Ana", CLAVE)
-    s.registro.ejecutar("ana@gmail.com", "Otra", CLAVE)           # no lanza error
+    s.registro.ejecutar("Ana@Gmail.com", "Ana", CLAVE, True)
+    s.registro.ejecutar("ana@gmail.com", "Otra", CLAVE, True)           # no lanza error
     assert len(s.uow.almacen.usuarios) == 1
     assert s.uow.almacen.usuarios[1].estado is EstadoCuenta.PENDIENTE
     assert [e.accion for e in s.uow.almacen.auditoria] == ["usuario.registro", "usuario.registro_duplicado"]
 
 
 def test_pendiente_no_puede_ingresar(s):
-    s.registro.ejecutar("ana@gmail.com", "Ana", CLAVE)
+    s.registro.ejecutar("ana@gmail.com", "Ana", CLAVE, True)
     with pytest.raises(AccesoDenegado, match="revisión"):
         s.inicio.ejecutar("ana@gmail.com", CLAVE)
 

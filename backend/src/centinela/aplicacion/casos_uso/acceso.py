@@ -78,6 +78,7 @@ class Paso(StrEnum):
     COMPLETO = "completo"
     VERIFICAR_2FA = "verificar_2fa"
     CONFIGURAR_2FA = "configurar_2fa"
+    CAMBIAR_CLAVE = "cambiar_clave"       # entró con una contraseña temporal: debe cambiarla antes de seguir
 
 
 @dataclass(frozen=True)
@@ -124,6 +125,13 @@ def _registrar_fallo(uow: UnidadDeTrabajo, usuario: Usuario, ahora: datetime, ct
         raise CuentaBloqueada(_msg_bloqueo(usuario, ahora))
 
 
+def _clave_temporal() -> str:
+    """Contraseña temporal legible para dictarla o copiarla: letras y números, cumple la política de claves."""
+    alfabeto = "abcdefghjkmnpqrstuvwxyz"
+    letras = "".join(secrets.choice(alfabeto) for _ in range(8))
+    return f"Temp-{letras[:4]}-{letras[4:]}-{secrets.randbelow(900) + 100}"
+
+
 def _crear_sesion(uow: UnidadDeTrabajo, usuario: Usuario, ahora: datetime, ctx: Contexto) -> SesionCreada:
     token = secrets.token_urlsafe(32)
     uow.sesiones.agregar(Sesion(usuario_id=usuario.id, token_hash=hash_token(token), creada_en=ahora,
@@ -140,9 +148,11 @@ class SolicitarRegistro(CasoDeUso):
         super().__init__(uow, reloj)
         self._hasher = hasher
 
-    def ejecutar(self, correo: str, nombre: str, clave: str, ctx: Contexto = SIN_CONTEXTO) -> None:
+    def ejecutar(self, correo: str, nombre: str, clave: str, acepta_politica: bool = False,
+                 ctx: Contexto = SIN_CONTEXTO) -> None:
         """Siempre responde igual, exista o no el correo, para no revelar qué cuentas existen."""
-        candidato = Usuario.solicitar(correo, nombre, clave_hash="")
+        candidato = Usuario.solicitar(correo, nombre, clave_hash="", acepta_politica=acepta_politica,
+                                      ahora=self._reloj.ahora())
         validar_clave(clave, candidato.correo)
         candidato.clave_hash = self._hasher.hashear(clave)      # se calcula siempre: mismo tiempo de respuesta
         with self._uow() as uow:
@@ -150,7 +160,7 @@ class SolicitarRegistro(CasoDeUso):
                 auditar(uow, "usuario.registro_duplicado", ctx, exito=False, correo=candidato.correo)
             else:
                 nuevo = uow.usuarios.agregar(candidato)
-                auditar(uow, "usuario.registro", ctx, nuevo.id)
+                auditar(uow, "usuario.registro", ctx, nuevo.id, politica=nuevo.consentimiento_version)
             uow.confirmar()
 
 
@@ -210,14 +220,45 @@ class IniciarSesion(CasoDeUso):
             if self._hasher.necesita_rehash(usuario.clave_hash):
                 usuario.clave_hash = self._hasher.hashear(clave)
                 uow.usuarios.guardar(usuario)
-
-            if usuario.debe_configurar_2fa:
-                resultado = ResultadoInicio(Paso.CONFIGURAR_2FA, usuario)
-            elif usuario.totp_activo:
-                resultado = ResultadoInicio(Paso.VERIFICAR_2FA, usuario)
+            if usuario.debe_cambiar_clave:
+                resultado = ResultadoInicio(Paso.CAMBIAR_CLAVE, usuario)
             else:
-                resultado = ResultadoInicio(Paso.COMPLETO, usuario, _crear_sesion(uow, usuario, ahora, ctx))
+                resultado = _siguiente_paso(uow, usuario, ahora, ctx)
             auditar(uow, "sesion.inicio" if resultado.sesion else "sesion.contrasena_valida", ctx, usuario.id)
+            uow.confirmar()
+            return resultado
+
+
+def _siguiente_paso(uow: UnidadDeTrabajo, usuario: Usuario, ahora: datetime, ctx: Contexto) -> ResultadoInicio:
+    """Tras una contraseña válida: configurar o verificar el doble factor, o abrir la sesión."""
+    if usuario.debe_configurar_2fa:
+        return ResultadoInicio(Paso.CONFIGURAR_2FA, usuario)
+    if usuario.totp_activo:
+        return ResultadoInicio(Paso.VERIFICAR_2FA, usuario)
+    return ResultadoInicio(Paso.COMPLETO, usuario, _crear_sesion(uow, usuario, ahora, ctx))
+
+
+class CambiarClaveTemporal(CasoDeUso):
+    """Primer ingreso con la contraseña temporal que asignó el administrador: la persona elige la suya."""
+
+    def __init__(self, uow: FabricaUnidadDeTrabajo, reloj: Reloj, hasher: HasherClaves):
+        super().__init__(uow, reloj)
+        self._hasher = hasher
+
+    def ejecutar(self, usuario_id: int, nueva: str, ctx: Contexto = SIN_CONTEXTO) -> ResultadoInicio:
+        ahora = self._reloj.ahora()
+        with self._uow() as uow:
+            usuario = usuario_activo(uow, usuario_id)
+            if not usuario.debe_cambiar_clave:
+                raise CredencialesInvalidas(MSG_SESION)
+            validar_clave(nueva, usuario.correo)
+            if self._hasher.verificar(nueva, usuario.clave_hash):
+                raise DatoInvalido("Elige una contraseña distinta de la temporal.")
+            usuario.cambiar_clave(self._hasher.hashear(nueva))
+            uow.usuarios.guardar(usuario)
+            uow.sesiones.revocar_de_usuario(usuario.id, ahora)
+            resultado = _siguiente_paso(uow, usuario, ahora, ctx)
+            auditar(uow, "usuario.cambiar_clave_temporal", ctx, usuario.id)
             uow.confirmar()
             return resultado
 
@@ -371,7 +412,7 @@ class CambiarClave(CasoDeUso):
             validar_clave(nueva, usuario.correo)
             if self._hasher.verificar(nueva, usuario.clave_hash):
                 raise DatoInvalido("La nueva contraseña debe ser distinta de la actual.")
-            usuario.clave_hash = self._hasher.hashear(nueva)
+            usuario.cambiar_clave(self._hasher.hashear(nueva))
             uow.sesiones.revocar_de_usuario(usuario.id, ahora)
             sesion = _crear_sesion(uow, usuario, ahora, ctx)
             auditar(uow, "usuario.cambiar_clave", ctx, usuario.id)
@@ -409,3 +450,62 @@ class CambiarEstadoCuenta(CasoDeUso):
                                                     objeto_tipo="usuario", objeto_id=str(usuario.id), ip=ctx.ip))
             uow.confirmar()
             return usuario
+
+
+class RestablecerClave(CasoDeUso):
+    """El administrador genera una contraseña temporal para quien olvidó la suya (se la entrega por un canal seguro).
+    Se cierran las sesiones abiertas y la persona deberá cambiarla al entrar."""
+
+    def __init__(self, uow: FabricaUnidadDeTrabajo, reloj: Reloj, hasher: HasherClaves):
+        super().__init__(uow, reloj)
+        self._hasher = hasher
+
+    def ejecutar(self, admin_id: int, usuario_id: int, ctx: Contexto = SIN_CONTEXTO) -> str:
+        temporal = _clave_temporal()
+        with self._uow() as uow:
+            admin = admin_activo(uow, admin_id)
+            usuario = uow.usuarios.por_id(usuario_id)
+            if usuario is None:
+                raise NoEncontrado("El usuario no existe.")
+            usuario.asignar_clave_temporal(admin, self._hasher.hashear(temporal))
+            uow.usuarios.guardar(usuario)
+            uow.sesiones.revocar_de_usuario(usuario.id, self._reloj.ahora())
+            uow.auditoria.registrar(EventoAuditoria(accion="usuario.restablecer_clave", usuario_id=admin.id,
+                                                    objeto_tipo="usuario", objeto_id=str(usuario.id), ip=ctx.ip))
+            uow.confirmar()
+        return temporal
+
+
+class EliminarMiCuenta(CasoDeUso):
+    """Derecho de supresión (Ley 1581, art. 8): la persona borra su cuenta y todos sus datos. Se le pide la contraseña
+    para confirmar. Además se revoca en Google el permiso de cada buzón conectado."""
+
+    def __init__(self, uow: FabricaUnidadDeTrabajo, reloj: Reloj, hasher: HasherClaves, cifrador: Cifrador,
+                 revocar_en_google=None):
+        super().__init__(uow, reloj)
+        self._hasher, self._cifrador, self._revocar = hasher, cifrador, revocar_en_google
+
+    def ejecutar(self, usuario_id: int, clave: str, ctx: Contexto = SIN_CONTEXTO) -> None:
+        ahora = self._reloj.ahora()
+        with self._uow() as uow:
+            usuario = usuario_activo(uow, usuario_id)
+            if usuario.esta_bloqueado(ahora):
+                raise CuentaBloqueada(_msg_bloqueo(usuario, ahora))
+            if not self._hasher.verificar(clave or "", usuario.clave_hash):
+                _registrar_fallo(uow, usuario, ahora, ctx, "usuario.eliminar")
+                raise CredencialesInvalidas("La contraseña no es correcta.")
+            if usuario.es_admin and uow.usuarios.administradores_activos() <= 1:
+                raise Conflicto("Eres el único administrador: crea o activa otro antes de eliminar tu cuenta.")
+            tokens = [self._cifrador.descifrar(b.refresh_token_cifrado) for b in uow.buzones.de_usuario(usuario.id)
+                      if b.refresh_token_cifrado]
+            uow.usuarios.eliminar(usuario.id)
+            uow.auditoria.registrar(EventoAuditoria(accion="usuario.eliminar", usuario_id=usuario.id,
+                                                    objeto_tipo="usuario", objeto_id=str(usuario.id), ip=ctx.ip,
+                                                    detalle={"buzones": len(tokens)}))
+            uow.confirmar()
+        for token in tokens:                     # cortesía: que el permiso también desaparezca en la cuenta de Google
+            if self._revocar is not None:
+                try:
+                    self._revocar.revocar(token)
+                except Exception:  # noqa: BLE001, S110 - el borrado ya se hizo; Google vence el permiso igual
+                    pass
