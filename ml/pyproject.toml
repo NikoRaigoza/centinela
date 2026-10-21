@@ -11,6 +11,7 @@ dependencies = [
     "lightgbm>=4.5",
     "scipy>=1.14",
     "centinela",
+    "pyzipper>=0.4.0",
 ]
 
 [tool.uv]
@@ -18,3 +19,8 @@ package = false
 
 [tool.uv.sources]
 centinela = { path = "../backend", editable = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]

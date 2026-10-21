@@ -18,3 +18,15 @@ uv run python -I scripts/cruce.py     "$PWD/datos"   # cruce de etiquetas con Sp
 ```
 
 Resultados en `hallazgos_calidad_datos.md`.
+
+### Conjunto colombiano (experimento central)
+
+Guía completa en `GUIA_DATOS_COLOMBIA.md`.
+
+```bash
+uv run python -I scripts/manifiesto.py --solo-arbol          # carpetas y CSV vacíos en datos/colombia/
+uv run python -I scripts/importar_sandbox.py ZIP --origen anyrun --categoria bancos --url-fuente URL  # saneado
+uv run python -I scripts/manifiesto.py                       # registra correos agregados a mano y sus campañas
+uv run python -I scripts/evaluar_colombia.py [--solo-contenido]   # conjunto de ajuste
+uv run pytest tests                                          # pruebas de la ingesta, el manifiesto y la división
+```
