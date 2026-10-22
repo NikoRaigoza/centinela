@@ -65,3 +65,9 @@ def test_texto_plano_de_relleno_usa_el_html():
     normal = "Hola Ana, te comparto el informe de la reunión de ayer con los compromisos de cada área."
     c = lector.leer(correo(cuerpo=normal, html=f"<p>{normal}</p>"))
     assert c.cuerpo == normal                                    # si ambos dicen lo mismo, se usa el texto plano
+
+
+def test_remitente_ilegible_usa_el_texto_crudo():
+    """Un From roto no tumba el análisis en ninguna versión de Python: se analiza con lo que se alcanza a leer."""
+    c = lector.leer(b"From: Bancolombia <alertas@bancolombia-seguro.xyz\nSubject: Hola\n\nTexto")
+    assert c.asunto == "Hola" and "bancolombia" in (c.remitente_correo + c.remitente_nombre).lower()

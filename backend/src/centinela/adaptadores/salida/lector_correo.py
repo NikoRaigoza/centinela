@@ -84,15 +84,31 @@ def _resultado(texto: str, clave: str) -> ResultadoAuth | None:
     return ResultadoAuth.interpretar(m.group(1)) if m else None
 
 
+def _encabezado(msg: EmailMessage, nombre: str) -> str:
+    """Valor del encabezado como texto. Si está tan roto que Python no logra interpretarlo (pasa en phishing y, según
+    la versión de Python, lanza HeaderParseError o IndexError), se usa su texto crudo en vez de abortar el análisis."""
+    try:
+        return str(msg.get(nombre) or "")
+    except Exception:  # noqa: BLE001
+        return next((str(v) for k, v in msg.raw_items() if k.lower() == nombre.lower()), "")
+
+
+def _todos(msg: EmailMessage, nombre: str) -> list[str]:
+    try:
+        return [str(h) for h in msg.get_all(nombre) or []]
+    except Exception:  # noqa: BLE001
+        return [str(v) for k, v in msg.raw_items() if k.lower() == nombre.lower()]
+
+
 def _autenticacion(msg: EmailMessage) -> Autenticacion:
-    encabezados = [str(h) for h in msg.get_all("Authentication-Results") or []]
+    encabezados = _todos(msg, "Authentication-Results")
     confiables = [h for h in encabezados if h.split(";", 1)[0].strip().lower() == SERVIDOR_CONFIABLE]
     fuente = confiables[0] if confiables else (encabezados[0] if encabezados else "")
     spf = _resultado(fuente, "spf")
     if spf is None and not confiables:
-        m = re.match(r"\s*([A-Za-z]+)", str(msg.get("Received-SPF") or ""))
+        m = re.match(r"\s*([A-Za-z]+)", _encabezado(msg, "Received-SPF"))
         spf = ResultadoAuth.interpretar(m.group(1)) if m else None
-    m = re.search(r"\bd=([^;\s]+)", str(msg.get("DKIM-Signature") or ""))
+    m = re.search(r"\bd=([^;\s]+)", _encabezado(msg, "DKIM-Signature"))
     return Autenticacion(spf=spf, dkim=_resultado(fuente, "dkim"), dmarc=_resultado(fuente, "dmarc"),
                          dkim_dominio=m.group(1).lower() if m else None, confiable=bool(confiables))
 
@@ -104,9 +120,9 @@ class LectorCorreoMime:
 
     def leer(self, crudo: bytes) -> CorreoParseado:
         msg = BytesParser(policy=policy.default).parsebytes(crudo)
-        nombre, remitente = parseaddr(str(msg.get("From") or ""))
-        _, responder_a = parseaddr(str(msg.get("Reply-To") or ""))
-        _, retorno = parseaddr(str(msg.get("Return-Path") or ""))
+        nombre, remitente = parseaddr(_encabezado(msg, "From"))
+        _, responder_a = parseaddr(_encabezado(msg, "Reply-To"))
+        _, retorno = parseaddr(_encabezado(msg, "Return-Path"))
         texto_plano, partes_html, adjuntos = [], [], []
         de_qr: list[Enlace] = []
         de_adjuntos: list[Enlace] = []
@@ -162,9 +178,9 @@ class LectorCorreoMime:
                 vistos.add(e.url)
                 enlaces.append(e)
 
-        message_id = str(msg.get("Message-ID") or "").strip() or None
+        message_id = _encabezado(msg, "Message-ID").strip() or None
         return CorreoParseado(
-            asunto=" ".join(str(msg.get("Subject") or "").split())[:500],
+            asunto=" ".join(_encabezado(msg, "Subject").split())[:500],
             remitente_nombre=nombre.strip()[:200],
             remitente_correo=remitente.lower()[:320],
             remitente_dominio=_dominio(remitente),
@@ -174,20 +190,20 @@ class LectorCorreoMime:
             responder_a_dominio=_dominio(responder_a) or None,
             ruta_retorno_dominio=_dominio(retorno) or None,
             autenticacion=_autenticacion(msg),
-            saltos=len(msg.get_all("Received") or []),
+            saltos=len(_todos(msg, "Received")),
             enlaces=tuple(enlaces[:MAX_ENLACES]),
             adjuntos=tuple(adjuntos),
             es_aviso_centinela=self._es_aviso(msg, message_id),
         )
 
     def _es_aviso(self, msg: EmailMessage, message_id: str | None) -> bool:
-        firma = str(msg.get(ENCABEZADO_AVISO) or "").strip()
+        firma = _encabezado(msg, ENCABEZADO_AVISO).strip()
         return bool(firma and message_id) and hmac.compare_digest(firma, firmar_aviso(self._clave_avisos, message_id))
 
     @staticmethod
     def _fecha(msg: EmailMessage):
         try:
-            f = parsedate_to_datetime(str(msg.get("Date") or ""))
+            f = parsedate_to_datetime(_encabezado(msg, "Date"))
         except (TypeError, ValueError, IndexError):
             return None
         return f if f.tzinfo else f.replace(tzinfo=UTC)
