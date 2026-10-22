@@ -149,7 +149,9 @@ class LectorCorreoMime:
             enlaces_html += ex.enlaces
             texto_html += " ".join("".join(ex.texto).split(" "))
         cuerpo = "\n".join(texto_plano).strip()
-        if len(cuerpo) < 30:
+        # El texto plano a veces es solo un relleno («Plain text version not available») y el contenido real está en
+        # el HTML. Con casi nada de texto el modelo no tiene en qué basarse: si el HTML dice mucho más, manda el HTML.
+        if len(cuerpo) < 30 or len(texto_html.split()) > 3 * max(len(cuerpo.split()), 10):
             cuerpo = texto_html.strip()
 
         enlaces, vistos = [], set()

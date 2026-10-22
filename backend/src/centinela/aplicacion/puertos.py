@@ -267,8 +267,10 @@ class RepoBuzones(Protocol):
     def agregar(self, buzon: Buzon) -> Buzon: ...
     def guardar(self, buzon: Buzon) -> None: ...
     def reclamar_pendientes(self, revisados_antes_de: datetime, ahora: datetime, limite: int,
-                            respaldo_antes_de: datetime | None = None) -> list[int]:
-        """Marca y devuelve buzones activos que tocan revisar. Seguro con varios workers a la vez."""
+                            respaldo_antes_de: datetime | None = None,
+                            reintento_antes_de: datetime | None = None) -> list[int]:
+        """Marca y devuelve buzones activos que tocan revisar, y los que están en ERROR con el permiso intacto
+        cuya última revisión es anterior a reintento_antes_de. Seguro con varios workers a la vez."""
         ...
     def solicitar_revision(self, buzon_id: int, ahora: datetime) -> None:
         """Gmail avisó de un correo nuevo: el buzón se revisa en el siguiente ciclo y se despierta al worker."""

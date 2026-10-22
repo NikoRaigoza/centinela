@@ -189,14 +189,18 @@ class _RepoBuzones:
     def guardar(self, b):
         self.a.buzones[b.id] = copy.deepcopy(b)
 
-    def reclamar_pendientes(self, antes_de, ahora, limite, respaldo_antes_de=None):
+    def reclamar_pendientes(self, antes_de, ahora, limite, respaldo_antes_de=None, reintento_antes_de=None):
         def toca(b):
+            if b.estado.value == "error":
+                return b.refresh_token_cifrado is not None and (
+                    b.id in self.a.revision_solicitada or b.ultima_revision_en is None
+                    or b.ultima_revision_en < (reintento_antes_de or antes_de))
             if b.id in self.a.revision_solicitada or b.ultima_revision_en is None:
                 return True
             vigilado = b.vigilancia_expira_en is not None and b.vigilancia_expira_en > ahora
             return b.ultima_revision_en < ((respaldo_antes_de or antes_de) if vigilado else antes_de)
 
-        ids = [b.id for b in self.a.buzones.values() if b.estado.value == "activo" and toca(b)][:limite]
+        ids = [b.id for b in self.a.buzones.values() if b.estado.value in ("activo", "error") and toca(b)][:limite]
         for i in ids:
             self.a.buzones[i].ultima_revision_en = ahora
             self.a.revision_solicitada.discard(i)

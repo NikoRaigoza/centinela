@@ -46,7 +46,7 @@ def test_informacion_legal_publica(entorno):
     c, *_ = entorno
     r = _anonimo(c).get("/api/publico/legal").json()
     assert r == {"version_politica": VERSION_POLITICA, "responsable": c.config.responsable_nombre,
-                 "correo_contacto": None, "dias_sin_riesgo": 30, "dias_casos": 365}
+                 "correo_contacto": c.config.responsable_correo, "dias_sin_riesgo": 30, "dias_casos": 365}
 
 
 def test_eliminar_mi_cuenta_borra_todo_y_revoca_google(entorno, motor_owner):

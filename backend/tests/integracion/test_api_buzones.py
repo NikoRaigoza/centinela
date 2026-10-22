@@ -130,3 +130,20 @@ def test_reclamar_pendientes_con_dos_workers_a_la_vez(entorno, motor_owner):
         s1.commit()
         s2.commit()
     assert len(primero) == 1 and segundo == []
+
+
+def test_reclamar_pendientes_reintenta_buzones_en_error(entorno, motor_owner):
+    c, auth = entorno
+    ana = cliente_de(c, "ana@gmail.com")
+    conectar(ana, auth, BuzonGmailFalso("ana@gmail.com"))
+    ahora = datetime.now(UTC) + timedelta(minutes=5)
+    with Session(motor_owner) as s:
+        s.execute(text("UPDATE centinela.buzon SET estado = 'error', ultima_revision_en = :t"), {"t": ahora})
+        s.commit()
+        repo = RepoBuzonesSql(s)
+        assert repo.reclamar_pendientes(ahora, ahora, 10, None, ahora - timedelta(seconds=60)) == []    # muy pronto
+        despues = ahora + timedelta(seconds=61)
+        assert len(repo.reclamar_pendientes(despues, despues, 10, None, despues - timedelta(seconds=60))) == 1
+        s.execute(text("UPDATE centinela.buzon SET refresh_token_cifrado = NULL, ultima_revision_en = NULL"))
+        assert repo.reclamar_pendientes(despues, despues, 10) == []                # sin permiso no se reintenta
+        s.rollback()

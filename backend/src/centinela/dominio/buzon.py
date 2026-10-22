@@ -73,6 +73,12 @@ class Buzon:
     def revisable(self) -> bool:
         return self.estado is EstadoBuzon.ACTIVO and self.refresh_token_cifrado is not None
 
+    @property
+    def reintentable(self) -> bool:
+        """En ERROR por fallas pasajeras (red, Gmail sin responder) pero con el permiso intacto: el worker lo sigue
+        intentando solo, p. ej. cuando el computador despierta de una suspensión y la red tarda en volver."""
+        return self.estado is EstadoBuzon.ERROR and self.refresh_token_cifrado is not None
+
     def en_tiempo_real(self, ahora: datetime) -> bool:
         return self.revisable and self.vigilancia_expira_en is not None and self.vigilancia_expira_en > ahora
 
@@ -107,9 +113,12 @@ class Buzon:
         self.ultimo_history_id = history_id
         self.ultima_revision_en = ahora
         self.errores_consecutivos, self.ultimo_error = 0, None
+        if self.estado is EstadoBuzon.ERROR:          # se recuperó solo: vuelve a vigilarse con normalidad
+            self.estado = EstadoBuzon.ACTIVO
 
     def registrar_error(self, mensaje: str, ahora: datetime) -> None:
-        """Errores pasajeros (red, cuotas): tras varios seguidos el buzón queda en ERROR y se avisa al dueño."""
+        """Errores pasajeros (red, cuotas): tras varios seguidos el buzón queda en ERROR (el panel lo muestra con
+        problemas), pero el worker lo sigue reintentando y vuelve a ACTIVO en cuanto una revisión funciona."""
         self.errores_consecutivos += 1
         self.ultimo_error = mensaje[:500]
         self.ultima_revision_en = ahora

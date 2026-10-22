@@ -213,16 +213,22 @@ class RepoBuzonesSql:
         self._s.flush()
 
     def reclamar_pendientes(self, revisados_antes_de: datetime, ahora: datetime, limite: int,
-                            respaldo_antes_de: datetime | None = None) -> list[int]:
+                            respaldo_antes_de: datetime | None = None,
+                            reintento_antes_de: datetime | None = None) -> list[int]:
         """Buzones que tocan: los que Gmail avisó que recibieron algo, y los que llevan un intervalo sin revisarse
         (más largo si Gmail avisa en tiempo real: esa revisión es solo de respaldo)."""
         vigilado = BuzonFila.vigilancia_expira_en > ahora
         vencido = or_(BuzonFila.ultima_revision_en.is_(None),
                       and_(~vigilado.is_(True), BuzonFila.ultima_revision_en < revisados_antes_de),
                       and_(vigilado.is_(True), BuzonFila.ultima_revision_en < (respaldo_antes_de or revisados_antes_de)))
+        activo = and_(BuzonFila.estado == EstadoBuzon.ACTIVO.value,
+                      or_(BuzonFila.revision_solicitada_en.is_not(None), vencido))
+        # En ERROR por fallas pasajeras (p. ej. el computador despertó sin red): se reintenta solo hasta recuperarse
+        reintento = and_(BuzonFila.estado == EstadoBuzon.ERROR.value, BuzonFila.refresh_token_cifrado.is_not(None),
+                         or_(BuzonFila.revision_solicitada_en.is_not(None), BuzonFila.ultima_revision_en.is_(None),
+                             BuzonFila.ultima_revision_en < (reintento_antes_de or revisados_antes_de)))
         pendientes = (select(BuzonFila.id)
-                      .where(BuzonFila.estado == EstadoBuzon.ACTIVO.value,
-                             or_(BuzonFila.revision_solicitada_en.is_not(None), vencido))
+                      .where(or_(activo, reintento))
                       .order_by(BuzonFila.revision_solicitada_en.asc().nulls_last(),
                                 BuzonFila.ultima_revision_en.asc().nulls_first())
                       .limit(limite)

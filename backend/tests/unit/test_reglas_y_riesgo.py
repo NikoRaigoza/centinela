@@ -117,3 +117,12 @@ def test_politica_de_cuarentena():
     a = decidir_acciones(NivelRiesgo.MEDIO, auto, True)
     assert (a.cuarentena, a.etiquetar_sospechoso, a.avisar) == (False, True, False)
     assert decidir_acciones(NivelRiesgo.BAJO, auto, True) == decidir_acciones(NivelRiesgo.BAJO, solo, False)
+
+
+@pytest.mark.parametrize("url,peligroso", [("http://descargas.top/factura.exe", True), ("https://x.co/a/setup.MSI?v=2", True),
+                                           ("https://x.co/p.js#inicio", True), ("www.JetSMART.com", False),
+                                           ("https://www.empresa.com", False), ("https://www.empresa.com/", False),
+                                           ("https://empresa.com?ref=com", False), ("https://empresa.com/ofertas.com.co", False)])
+def test_extension_peligrosa_solo_en_la_ruta(url, peligroso):
+    textos = " ".join(r.texto for r in evaluar_reglas(correo(enlaces=(Enlace(url),)), CATALOGO).razones)
+    assert ("descarga directamente un programa" in textos) is peligroso

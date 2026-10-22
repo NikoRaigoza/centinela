@@ -55,3 +55,13 @@ def test_aviso_de_centinela_solo_si_la_firma_es_valida():
 def test_correo_mal_formado_no_rompe_el_lector():
     c = lector.leer(b"From: sin-cierre <x@\nSubject: =?utf-8?q?roto\n\n<a href='http://x.co'>sin cerrar")
     assert c.asunto is not None
+
+
+def test_texto_plano_de_relleno_usa_el_html():
+    """Boletines que traen «Plain text version not available» como texto plano: el contenido real está en el HTML."""
+    html = "<p>" + "Descubre nuestras ofertas de vuelos y hoteles para esta temporada. " * 10 + "</p>"
+    c = lector.leer(correo(cuerpo="Plain text version not available", html=html))
+    assert "ofertas de vuelos" in c.cuerpo and "not available" not in c.cuerpo
+    normal = "Hola Ana, te comparto el informe de la reunión de ayer con los compromisos de cada área."
+    c = lector.leer(correo(cuerpo=normal, html=f"<p>{normal}</p>"))
+    assert c.cuerpo == normal                                    # si ambos dicen lo mismo, se usa el texto plano

@@ -230,7 +230,7 @@ class RevisarBuzon(CasoDeUso):
         with self._uow() as uow:
             buzon = (_buzon_propio(uow, solicitado_por, buzon_id) if solicitado_por is not None
                      else uow.buzones.por_id(buzon_id))
-        if buzon is None or not buzon.revisable:
+        if buzon is None or not (buzon.revisable or buzon.reintentable):
             return ResumenRevision(buzon_id, estado=buzon.estado.value if buzon else "inexistente")
 
         try:
@@ -245,7 +245,7 @@ class RevisarBuzon(CasoDeUso):
 
         with self._uow() as uow:
             actual = uow.buzones.por_id(buzon.id)
-            if actual is not None and actual.revisable:      # pudo desconectarse mientras se revisaba
+            if actual is not None and (actual.revisable or actual.reintentable):   # pudo desconectarse entretanto
                 actual.registrar_revision(history_id, self._reloj.ahora())
                 uow.buzones.guardar(actual)
                 uow.confirmar()
@@ -365,12 +365,18 @@ class RevisarBuzonesPendientes(CasoDeUso):
         with self._uow() as uow:
             return max(60, int(uow.configuracion.obtener("analisis.intervalo_respaldo_s", 300)))
 
+    def intervalo_reintento_segundos(self) -> int:
+        """Cada cuánto se reintenta un buzón en ERROR (falla pasajera): se recupera solo al volver la red."""
+        with self._uow() as uow:
+            return max(30, int(uow.configuracion.obtener("analisis.intervalo_reintento_error_s", 60)))
+
     def ejecutar(self, limite: int = 20) -> list[ResumenRevision]:
         ahora = self._reloj.ahora()
         intervalo = self.intervalo_segundos()
         respaldo = ahora - timedelta(seconds=self.intervalo_respaldo_segundos()) if self._tiempo_real else None
         with self._uow() as uow:
-            ids = uow.buzones.reclamar_pendientes(ahora - timedelta(seconds=intervalo), ahora, limite, respaldo)
+            ids = uow.buzones.reclamar_pendientes(ahora - timedelta(seconds=intervalo), ahora, limite, respaldo,
+                                                  ahora - timedelta(seconds=self.intervalo_reintento_segundos()))
             uow.confirmar()
         resumenes = []
         for buzon_id in ids:

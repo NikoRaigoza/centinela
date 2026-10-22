@@ -151,6 +151,16 @@ def _qr(c: CorreoParseado, catalogo: CatalogoEntidades, r: ResultadoReglas) -> N
                   "si no esperabas este correo.")
 
 
+_RE_ARCHIVO_PELIGROSO = re.compile(r"\.(" + "|".join(sorted(EXT_PELIGROSAS)) + r")$")
+
+
+def _ruta_de_url(url: str) -> str:
+    """Solo la ruta (sin esquema, dominio, consulta ni fragmento): «www.empresa.com» no es un programa «.com»."""
+    sin_esquema = re.sub(r"(?i)^[a-z][a-z0-9+.-]*://", "", url)
+    ruta = sin_esquema.split("/", 1)[1] if "/" in sin_esquema else ""
+    return re.split(r"[?#]", ruta, maxsplit=1)[0].lower()
+
+
 def _enlaces(c: CorreoParseado, catalogo: CatalogoEntidades, r: ResultadoReglas) -> None:
     vistos: set[str] = set()
     for e in c.enlaces:
@@ -182,7 +192,7 @@ def _enlaces(c: CorreoParseado, catalogo: CatalogoEntidades, r: ResultadoReglas)
             r.agregar(Area.ENLACE, Gravedad.ALTA, f"{un} usa el símbolo @ para esconder su verdadero destino.")
         if tld(real) in TLDS_ABUSO:
             r.agregar(Area.ENLACE, Gravedad.MEDIA, f"{un} lleva a {real}, una terminación muy usada en fraudes.")
-        if re.search(r"\.(" + "|".join(EXT_PELIGROSAS) + r")(\?|$)", url.lower()):
+        if _RE_ARCHIVO_PELIGROSO.search(_ruta_de_url(url)):
             r.agregar(Area.ENLACE, Gravedad.ALTA, f"{un} descarga directamente un programa o archivo peligroso.")
         if real in ACORTADORES:
             r.agregar(Area.ENLACE, Gravedad.MEDIA, f"{un} está acortado ({real}): no se ve a dónde lleva realmente.")

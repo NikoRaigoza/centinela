@@ -95,6 +95,33 @@ def test_errores_pasajeros_llevan_a_estado_error(s):
     assert s.revisar.ejecutar(b.id).estado == "activo"
 
 
+def test_buzon_en_error_se_recupera_solo_al_volver_la_red(s):
+    """El Mac despierta de una suspensión sin red: el buzón queda en ERROR, pero el worker lo reintenta solo."""
+    b = conectar(s)
+    s.gmail.falla = "No hubo respuesta de Gmail."
+    for _ in range(5):
+        s.reloj.avanzar(seconds=31)
+        s.pendientes.ejecutar()
+    assert s.uow.almacen.buzones[b.id].estado is EstadoBuzon.ERROR
+    s.reloj.avanzar(seconds=31)
+    assert s.pendientes.ejecutar() == []                     # en ERROR se reintenta cada 60 s, no cada 30 s
+    s.gmail.falla = None
+    s.gmail.llega(correo())
+    s.reloj.avanzar(seconds=30)
+    assert [(r.estado, r.nuevos) for r in s.pendientes.ejecutar()] == [("activo", 1)]
+    guardado = s.uow.almacen.buzones[b.id]
+    assert guardado.estado is EstadoBuzon.ACTIVO and guardado.errores_consecutivos == 0 and guardado.ultimo_error is None
+
+
+def test_buzon_revocado_no_se_reintenta(s):
+    b = conectar(s)
+    s.gmail.revocado = True
+    s.revisar.ejecutar(b.id)
+    s.gmail.revocado = False
+    s.reloj.avanzar(minutes=10)
+    assert s.pendientes.ejecutar() == []                     # sin permiso no hay reintento: hay que reconectar
+
+
 def test_si_google_retira_el_permiso_el_buzon_queda_revocado(s):
     b = conectar(s)
     s.gmail.revocado = True
