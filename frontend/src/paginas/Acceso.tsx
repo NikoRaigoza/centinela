@@ -3,14 +3,14 @@
 import { EyeOff, MessageSquareText, ShieldCheck } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
-import { Escudo } from "../componentes/Escudo";
+import { Logo } from "../componentes/Logo";
 
 export function MarcoAcceso({ children }: { children: ReactNode }) {
   return (
     <div className="acceso">
       <section className="acceso-lado">
         <div className="fila" style={{ color: "#fff" }}>
-          <Escudo tamano={34} />
+          <Logo tamano={44} />
           <strong style={{ fontSize: "1.3rem" }}>CENTINELA</strong>
         </div>
         <div className="pila" style={{ gap: 22 }}>

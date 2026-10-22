@@ -1,5 +1,7 @@
 """Adaptadores de ML (con los modelos reales del repositorio) y redacción de avisos."""
 import shutil
+from email import policy
+from email.parser import BytesParser
 from pathlib import Path
 
 import pytest
@@ -69,3 +71,8 @@ def test_aviso_firmado_y_legible():
     assert leido.es_aviso_centinela and "Cuenta <bloqueada>" in leido.asunto
     assert "Razón 2" in leido.cuerpo and "http://localhost:5173/casos/15" in leido.cuerpo   # enlace directo al caso
     assert not LectorCorreoMime(b"otra-clave").leer(crudo).es_aviso_centinela
+    msg = BytesParser(policy=policy.default).parsebytes(crudo)
+    html = msg.get_body(("html",))
+    logo = next(p for p in msg.walk() if p.get_content_type() == "image/png")
+    assert 'src="cid:logo-centinela"' in html.get_content() and logo["Content-ID"] == "<logo-centinela>"
+    assert logo.get_content()[:8] == b"\x89PNG\r\n\x1a\n"                     # el logo viaja dentro del correo

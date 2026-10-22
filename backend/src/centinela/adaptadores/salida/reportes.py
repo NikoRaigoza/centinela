@@ -10,6 +10,7 @@ from __future__ import annotations
 import io
 import re
 from datetime import datetime
+from pathlib import Path
 from xml.sax.saxutils import escape
 from zoneinfo import ZoneInfo
 
@@ -36,6 +37,7 @@ NOTA_PRIVACIDAD = ("Centinela no guarda el contenido de los correos: este report
 
 AZUL = "#1f5fbf"
 OSCURO = "#0f1f38"
+LOGO = Path(__file__).parent / "recursos" / "logo-blanco.png"
 TEXTO = "#142033"
 TENUE = "#5b6b82"
 BORDE = "#dde4ee"
@@ -198,9 +200,11 @@ class GeneradorReportes:
             alto_pagina = documento.pagesize[1]
             lienzo.setFillColor(c(OSCURO))
             lienzo.rect(0, alto_pagina - 12 * mm, documento.pagesize[0], 12 * mm, stroke=0, fill=1)
+            lienzo.drawImage(str(LOGO), 18 * mm, alto_pagina - 10.5 * mm, width=8 * mm, height=9 * mm,
+                             mask="auto", preserveAspectRatio=True)
             lienzo.setFillColor(c("#ffffff"))
             lienzo.setFont("Helvetica-Bold", 10)
-            lienzo.drawString(18 * mm, alto_pagina - 7.6 * mm, "CENTINELA")
+            lienzo.drawString(28 * mm, alto_pagina - 7.6 * mm, "CENTINELA")
             lienzo.setFont("Helvetica", 8)
             lienzo.drawRightString(documento.pagesize[0] - 18 * mm, alto_pagina - 7.6 * mm,
                                    "Protección contra phishing en Gmail")

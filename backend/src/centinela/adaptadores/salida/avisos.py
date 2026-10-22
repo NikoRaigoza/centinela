@@ -4,6 +4,7 @@ from __future__ import annotations
 import html
 from email.message import EmailMessage
 from email.utils import formataddr, formatdate, make_msgid
+from pathlib import Path
 
 from centinela.adaptadores.salida.lector_correo import ENCABEZADO_AVISO, firmar_aviso
 from centinela.aplicacion.puertos import DatosAviso
@@ -15,6 +16,9 @@ CONSEJOS = (
     "Si ya entregaste datos o claves, cámbialas de inmediato y comunícate con tu banco.",
 )
 _COLOR = {"alto": ("#C62828", "#FDE8E8"), "medio": ("#946200", "#FFF4D6")}
+# El logo va dentro del mismo correo (cid): Gmail no podría descargarlo de un panel local o privado
+LOGO = (Path(__file__).parent / "recursos" / "logo-blanco.png").read_bytes()
+CID_LOGO = "logo-centinela"
 
 
 class RedactorAvisosMime:
@@ -48,6 +52,8 @@ class RedactorAvisosMime:
         texto += ["", f"Revisa el detalle en Centinela: {self._enlace(d)}"]
         msg.set_content("\n".join(texto))
         msg.add_alternative(self._html(d, nivel), subtype="html")
+        msg.get_payload()[1].add_related(LOGO, maintype="image", subtype="png", cid=f"<{CID_LOGO}>",
+                                         filename="centinela.png", disposition="inline")
         return msg.as_bytes()
 
     def _html(self, d: DatosAviso, nivel: str) -> str:
@@ -59,8 +65,9 @@ class RedactorAvisosMime:
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:24px 0"><tr><td align="center">
 <table role="presentation" width="600" cellpadding="0" cellspacing="0"
  style="max-width:600px;width:100%;background:#fff;border-radius:12px">
-<tr><td style="background:{fg};color:#fff;padding:18px 24px;font-size:18px;font-weight:bold;border-radius:12px 12px 0 0">
-⚠ Centinela detectó un correo peligroso</td></tr>
+<tr><td style="background:{fg};color:#fff;padding:16px 24px;font-size:18px;font-weight:bold;border-radius:12px 12px 0 0">
+<img src="cid:{CID_LOGO}" width="28" height="32" alt="" style="vertical-align:middle;margin-right:10px;border:0">
+Centinela detectó un correo peligroso</td></tr>
 <tr><td style="padding:20px 24px;font-size:14px;line-height:1.55">
 <span style="background:{bg};color:{fg};font-weight:bold;font-size:12px;padding:3px 10px;border-radius:12px">
 RIESGO {e(nivel)}</span>

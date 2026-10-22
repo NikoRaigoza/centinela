@@ -19,7 +19,7 @@ import {
 import { useEffect, useState, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation } from "react-router";
 import { panel } from "../api/servicios";
-import { Escudo } from "../componentes/Escudo";
+import { Logo } from "../componentes/Logo";
 import { useSesion, useUsuario } from "../sesion/Sesion";
 
 function Enlace({ a, icono, children, contador }: { a: string; icono: ReactNode; children: ReactNode; contador?: number }) {
@@ -46,7 +46,7 @@ export function Marco() {
     <div className={`marco ${abierto ? "menu-abierto" : ""}`}>
       <aside className="lateral" aria-label="Menú principal">
         <NavLink to="/" className="marca">
-          <Escudo tamano={30} />
+          <Logo tamano={36} />
           <div>
             <strong>Centinela</strong>
             <small>Protección contra phishing</small>
@@ -84,7 +84,7 @@ export function Marco() {
           <button className="boton" onClick={() => setAbierto((v) => !v)} aria-label={abierto ? "Cerrar menú" : "Abrir menú"}>
             {abierto ? <X size={22} /> : <Menu size={22} />}
           </button>
-          <Escudo tamano={24} />
+          <Logo tamano={28} />
           <strong>Centinela</strong>
         </header>
         <main className="pagina" id="contenido">

@@ -8,7 +8,7 @@ import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { publico } from "../api/servicios";
 import type { InfoLegal } from "../api/tipos";
-import { Escudo } from "../componentes/Escudo";
+import { Logo } from "../componentes/Logo";
 import { ErrorCarga, Esqueleto } from "../componentes/ui";
 import { useSesion } from "../sesion/Sesion";
 
@@ -19,7 +19,7 @@ function MarcoLegal({ titulo, children }: { titulo: string; children: (info: Inf
   return (
     <div className="pagina-legal">
       <header className="fila" style={{ gap: 10 }}>
-        <Escudo tamano={28} /><strong>Centinela</strong>
+        <Logo tamano={32} variante="auto" /><strong>Centinela</strong>
       </header>
       <article className="tarjeta texto-legal">
         <Link to={volver} className="boton fantasma pequeno"><ArrowLeft size={14} aria-hidden /> Volver</Link>
