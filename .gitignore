@@ -31,3 +31,6 @@ ml/datos/
 # Despliegue: secretos del servidor y copias de la base de datos
 .env.app
 respaldos/
+
+# Muestras de MalwareBazaar sin importar (zips con malware real)
+ml/entrada_sandbox/

@@ -11,7 +11,7 @@ export function MarcoAcceso({ children }: { children: ReactNode }) {
       <section className="acceso-lado">
         <div className="fila" style={{ color: "#fff" }}>
           <Escudo tamano={34} />
-          <strong style={{ fontSize: "1.3rem" }}>Centinela</strong>
+          <strong style={{ fontSize: "1.3rem" }}>CENTINELA</strong>
         </div>
         <div className="pila" style={{ gap: 22 }}>
           <h1>Detecta el phishing que llega a tu Gmail antes de que caigas.</h1>
